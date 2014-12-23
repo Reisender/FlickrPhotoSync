@@ -1,0 +1,10 @@
+{
+  "consumer": {
+    "token":"",
+    "secret":""
+  },
+  "access": {
+    "token":"",
+    "secret":""
+  }
+}
