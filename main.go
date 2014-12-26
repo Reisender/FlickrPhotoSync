@@ -9,6 +9,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"encoding/json"
+	"strconv"
 )
 
 type Config struct {
@@ -46,6 +47,7 @@ var oauthClient = oauth.Client {
 var credPath = flag.String("config", "config.json", "Path to configuration file containing the application's credentials.")
 var config Config
 var apiBase = "https://api.flickr.com/services/rest"
+var form = url.Values{}
 
 // Load the consumer key and secret in from the config file
 func readCredentials() error {
@@ -57,17 +59,8 @@ func readCredentials() error {
 	return json.Unmarshal(b, &config)
 }
 
-func getPhotos() {
-	urlStr := "https://api.flickr.com/services/rest"
-	form := url.Values{}
-	form.Set("method", "flickr.photos.getUntagged")
-	form.Add("format", "json")
-	form.Add("nojsoncallback", "1")
-	form.Add("per_page", "500") // max page size
-	//form.Add("page", "1")
-
-
-	r, err := oauthClient.Get(http.DefaultClient, &config.Access, urlStr, form)
+func apiGet(resp *Response) {
+	r, err := oauthClient.Get(http.DefaultClient, &config.Access, apiBase, form)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -78,24 +71,52 @@ func getPhotos() {
 		log.Fatal(r.Status)
 	}
 
-	var data Response
 	contents, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	json.Unmarshal(contents, &data)
-	if data.Stat != "ok" {
+	json.Unmarshal(contents, resp)
+	if resp.Stat != "ok" {
 		log.Fatal("dang:\n",string(contents))
 	}
+}
 
-	fmt.Println(data.Data.Pages)
+func getAllPages(fn func(*Response)) {
+	var data Response
+	pageCount := 1
 
-	/*
-	for _, img := range data.Data.Photos {
-		fmt.Println("Image title: ",img.Title)
+	// get the rest of the pages
+	for page := 1; page <= pageCount; page++ {
+		form.Set("page", strconv.Itoa(page))
+
+		apiGet(&data)
+
+		// update the page count if needed
+		if pageCount != data.Data.Pages {
+			pageCount = data.Data.Pages
+		}
+
+		fn(&data)
 	}
-	*/
+}
+
+func getPhotos() {
+	form.Set("method", "flickr.photos.getUntagged")
+	form.Add("format", "json")
+	form.Add("nojsoncallback", "1")
+	form.Add("per_page", "500") // max page size
+
+	photos := make(map[string]Photo)
+
+	getAllPages(func(data *Response) {
+		// extract into photos map
+		for _, img := range data.Data.Photos {
+			photos[img.Title] = img
+		}
+	})
+
+	fmt.Println("length = ", len(photos))
 }
 
 func main() {
