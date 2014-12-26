@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"strconv"
+	"sync"
 )
 
 type Config struct {
@@ -84,21 +85,31 @@ func apiGet(resp *Response) {
 
 func getAllPages(fn func(*Response)) {
 	var data Response
-	pageCount := 1
+	var wg sync.WaitGroup
+
+	apiGet(&data)
+	fmt.Println("got page 1")
+	wg.Add(data.Data.Pages)
+	go func() {
+		defer wg.Done()
+		fn(&data)
+	}()
 
 	// get the rest of the pages
-	for page := 1; page <= pageCount; page++ {
-		form.Set("page", strconv.Itoa(page))
+	for page := 2; page <= data.Data.Pages; page++ {
+		go func(page int) {
+			defer wg.Done()
 
-		apiGet(&data)
+			form.Set("page", strconv.Itoa(page))
 
-		// update the page count if needed
-		if pageCount != data.Data.Pages {
-			pageCount = data.Data.Pages
-		}
+			apiGet(&data)
+			fmt.Println("got page ",page)
 
-		fn(&data)
+			fn(&data)
+		}(page)
 	}
+
+	wg.Wait()
 }
 
 func getPhotos() {
