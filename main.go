@@ -112,7 +112,7 @@ func getAllPages(fn func(*Response)) {
 	wg.Wait()
 }
 
-func getPhotos() {
+func getPhotos() (*map[string]Photo) {
 	form.Set("method", "flickr.photos.getUntagged")
 	form.Add("format", "json")
 	form.Add("nojsoncallback", "1")
@@ -127,7 +127,7 @@ func getPhotos() {
 		}
 	})
 
-	fmt.Println("length = ", len(photos))
+	return &photos
 }
 
 func main() {
@@ -138,5 +138,7 @@ func main() {
 	// setup the consumer key and secret from the confis
 	oauthClient.Credentials = config.Consumer
 
-	getPhotos()
+	photos := getPhotos()
+
+	fmt.Println("length = ", len(*photos))
 }
