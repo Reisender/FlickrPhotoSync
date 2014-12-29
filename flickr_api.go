@@ -14,7 +14,7 @@ import (
 
 
 type Photo struct {
-	Id int `json:"string"`
+	Id string
 	Owner string
 	Secret string
 	Title string
@@ -23,7 +23,18 @@ type Photo struct {
 	Isfamily int `json:"string"`
 }
 
-type Response struct {
+type PhotoInfo struct {
+	Rotation int
+	Originalformat string
+	Media string
+}
+
+type PhotoSize struct {
+	Label string
+	Source string
+}
+
+type FlickrApiResponse struct {
 	Stat string
 	Data struct {
 		Page int
@@ -33,6 +44,10 @@ type Response struct {
 		Photos []Photo `json:"photo"`
 	} `json:"photos"`
 	User FlickrUser `json:"user"`
+	PhotoDetails PhotoInfo `json:"photo"`
+	SizeData struct {
+		Sizes []PhotoSize `json:"size"`
+	} `json:"sizes"`
 }
 
 type FlickrUser struct {
@@ -82,7 +97,7 @@ func (this *FlickrAPI) GetPhotos(user *FlickrUser) (*PhotosMap, error) {
 
 	photos := make(PhotosMap)
 
-	err := this.getAllPages(func(data *Response) {
+	err := this.getAllPages(func(data *FlickrApiResponse) {
 		// extract into photos map
 		for _, img := range data.Data.Photos {
 			photos[img.Title] = img
@@ -103,6 +118,47 @@ func (this *FlickrAPI) GetLogin() (*FlickrUser, error) {
 	return &data.User, nil
 }
 
+func (this *FlickrAPI) GetExtention(info *PhotoInfo) (string, error) {
+	switch info.Media {
+	case "photo":
+		return "jpg", nil
+	case "video":
+		return "mp4", nil
+	default:
+		return "", Error{"Unable to find file extention."}
+	}
+}
+
+func (this *FlickrAPI) GetInfo(p *Photo) (*PhotoInfo, error) {
+	this.form.Set("method", "flickr.photos.getInfo")
+
+	this.form.Set("photo_id", p.Id)
+	defer this.form.Del("photo_id") // remove from form values when done
+
+	data, err := this.apiGet()
+	if err != nil {
+		log.Fatal(err)
+		return nil, err
+	}
+
+	return &data.PhotoDetails, nil
+}
+
+func (this *FlickrAPI) GetSizes(p *Photo) (*[]PhotoSize, error) {
+	this.form.Set("method", "flickr.photos.getSizes")
+
+	this.form.Set("photo_id", p.Id)
+	defer this.form.Del("photo_id") // remove from form values when done
+
+	data, err := this.apiGet()
+	if err != nil {
+		log.Fatal(err)
+		return nil, err
+	}
+
+	return &data.SizeData.Sizes, nil
+}
+
 func (this *FlickrAPI) SetTitle(p *Photo, title string) error {
 	this.form.Set("method", "flickr.photos.setMeta")
 
@@ -121,8 +177,8 @@ func (this *FlickrAPI) SetTitle(p *Photo, title string) error {
 // ***** Private Functions *****
 
 
-func (this *FlickrAPI) apiGet() (*Response, error) {
-	resp := Response{}
+func (this *FlickrAPI) apiGet() (*FlickrApiResponse, error) {
+	resp := FlickrApiResponse{}
 	r, err := this.oauthClient.Get(http.DefaultClient, &this.config.Access, this.apiBase, this.form)
 	if err != nil {
 		log.Fatal(err)
@@ -150,7 +206,7 @@ func (this *FlickrAPI) apiGet() (*Response, error) {
 	return &resp, nil
 }
 
-func (this *FlickrAPI) getAllPages(fn func(*Response)) error {
+func (this *FlickrAPI) getAllPages(fn func(*FlickrApiResponse)) error {
 	var wg sync.WaitGroup
 
 	data, err := this.apiGet()

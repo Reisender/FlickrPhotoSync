@@ -8,7 +8,7 @@ import (
 type Error struct {
 	response string
 }
-func (e *Error) Error() string {
+func (e Error) Error() string {
 	return fmt.Sprintf("API fail: %s", e.response)
 }
 
