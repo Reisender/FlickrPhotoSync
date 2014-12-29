@@ -73,6 +73,7 @@ func (this *FlickrAPI) GetPhotos(flickrUserId string) (*PhotosMap) {
 	this.form.Set("format", "json")
 	this.form.Set("nojsoncallback", "1")
 	this.form.Set("user_id", flickrUserId)
+	defer this.form.Del("user_id") // remove from form values when done
 	this.form.Set("per_page", "500") // max page size
 
 	photos := make(PhotosMap)
@@ -87,17 +88,33 @@ func (this *FlickrAPI) GetPhotos(flickrUserId string) (*PhotosMap) {
 	return &photos
 }
 
-func (this *FlickrAPI) GetLogin() *FlickrUser {
+func (this *FlickrAPI) GetLogin() (*FlickrUser, error) {
 	this.form.Set("method", "flickr.test.login")
 	this.form.Set("format", "json")
 	this.form.Set("nojsoncallback", "1")
 
 	data, err := this.apiGet()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	return &data.User
+	return &data.User, nil
+}
+
+func (this *FlickrAPI) SetTitle(p *Photo, title string) error {
+	this.form.Set("method", "flickr.photos.setMeta")
+	this.form.Set("format", "json")
+	this.form.Set("nojsoncallback", "1")
+
+	this.form.Set("photo_id", string(p.Id))
+	defer this.form.Del("photo_id") // remove from form values when done
+
+	this.form.Set("title", title)
+	defer this.form.Del("title")
+
+	_, err := this.apiGet()
+
+	return err
 }
 
 

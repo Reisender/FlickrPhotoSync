@@ -19,7 +19,10 @@ func main() {
 
 	fl := photosync.NewFlickrAPI()
 
-	user := fl.GetLogin()
+	user, err := fl.GetLogin()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	photos := fl.GetPhotos(user.Id)
 
