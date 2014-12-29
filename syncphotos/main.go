@@ -17,9 +17,11 @@ func main() {
 		log.Fatalf("Error reading configuration, %v", err)
 	}
 
-	user := photosync.GetLogin()
+	fl := photosync.NewFlickrAPI()
 
-	photos := photosync.GetPhotos(user.Id)
+	user := fl.GetLogin()
 
-	fmt.Println("length = ", len(*photos))
+	photos := fl.GetPhotos(user.Id)
+
+	fmt.Println(len(*photos),"photos found")
 }
