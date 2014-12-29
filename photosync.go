@@ -1,4 +1,4 @@
-package main
+package photosync
 
 import (
 	"github.com/garyburd/go-oauth/oauth"
@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"log"
-	"flag"
 	"io/ioutil"
 	"encoding/json"
 	"strconv"
@@ -16,16 +15,17 @@ import (
 type Config struct {
 	Consumer oauth.Credentials
 	Access oauth.Credentials
+	FlickrUserId string `json:"flickr_user_id"`
 }
 
 type Photo struct {
-	Id int
+	Id int `json:"string"`
 	Owner string
 	Secret string
 	Title string
-	Ispublic int
-	Isfriend int
-	Isfamily int
+	Ispublic int `json:"string"`
+	Isfriend int `json:"string"`
+	Isfamily int `json:"string"`
 }
 
 type Response struct {
@@ -37,7 +37,24 @@ type Response struct {
 		Total string
 		Photos []Photo `json:"photo"`
 	} `json:"photos"`
+	User FlickrUser `json:"user"`
 }
+
+type FlickrUser struct {
+	Id string
+	Username struct {
+		Content string `json:"_content"`
+	} `json:"username"`
+}
+
+// API Error type
+type Error struct {
+	response string
+}
+func (e *Error) Error() string {
+	return fmt.Sprintf("API fail: %s", e.response)
+}
+
 
 var oauthClient = oauth.Client {
 	TemporaryCredentialRequestURI: "https://api.flickr.com/services/oauth/request_token",
@@ -45,22 +62,30 @@ var oauthClient = oauth.Client {
 	TokenRequestURI:               "https://api.flickr.com/services/oauth/access_token",
 }
 
-var credPath = flag.String("config", "config.json", "Path to configuration file containing the application's credentials.")
 var config Config
 var apiBase = "https://api.flickr.com/services/rest"
 var form = url.Values{}
 
 // Load the consumer key and secret in from the config file
-func readCredentials() error {
-	b, err := ioutil.ReadFile(*credPath)
+func LoadConfig(configPath *string) error {
+	b, err := ioutil.ReadFile(*configPath)
 	if err != nil {
 		return err
 	}
-	//return json.Unmarshal(b, &oauthClient.Credentials)
-	return json.Unmarshal(b, &config)
+
+	errr := json.Unmarshal(b, &config)
+	if errr != nil {
+		return errr
+	}
+
+	// setup the consumer key and secret from the confis
+	oauthClient.Credentials = config.Consumer
+
+	return nil
 }
 
-func apiGet(resp *Response) {
+func apiGet() (*Response, error) {
+	resp := Response{}
 	r, err := oauthClient.Get(http.DefaultClient, &config.Access, apiBase, form)
 	if err != nil {
 		log.Fatal(err)
@@ -77,22 +102,29 @@ func apiGet(resp *Response) {
 		log.Fatal(err)
 	}
 
-	json.Unmarshal(contents, resp)
-	if resp.Stat != "ok" {
-		log.Fatal("dang:\n",string(contents))
+	err = json.Unmarshal(contents, &resp)
+	if err != nil {
+		return nil, err
 	}
+	if resp.Stat != "ok" {
+		return nil, &Error{ string(contents) }
+	}
+
+	return &resp, nil
 }
 
 func getAllPages(fn func(*Response)) {
-	var data Response
 	var wg sync.WaitGroup
 
-	apiGet(&data)
+	data, err := apiGet()
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Println("got page 1")
 	wg.Add(data.Data.Pages)
 	go func() {
 		defer wg.Done()
-		fn(&data)
+		fn(data)
 	}()
 
 	// get the rest of the pages
@@ -102,21 +134,26 @@ func getAllPages(fn func(*Response)) {
 
 			form.Set("page", strconv.Itoa(page))
 
-			apiGet(&data)
+			data, err := apiGet()
+			if err != nil {
+				log.Fatal(err)
+			}
+
 			fmt.Println("got page ",page)
 
-			fn(&data)
+			fn(data)
 		}(page)
 	}
 
 	wg.Wait()
 }
 
-func getPhotos() (*map[string]Photo) {
-	form.Set("method", "flickr.photos.getUntagged")
-	form.Add("format", "json")
-	form.Add("nojsoncallback", "1")
-	form.Add("per_page", "500") // max page size
+func GetPhotos(flickrUserId string) (*map[string]Photo) {
+	form.Set("method", "flickr.photos.search")
+	form.Set("format", "json")
+	form.Set("nojsoncallback", "1")
+	form.Set("user_id", flickrUserId)
+	form.Set("per_page", "500") // max page size
 
 	photos := make(map[string]Photo)
 
@@ -130,15 +167,15 @@ func getPhotos() (*map[string]Photo) {
 	return &photos
 }
 
-func main() {
-	if err := readCredentials(); err != nil {
-		log.Fatalf("Error reading configuration, %v", err)
+func GetLogin() *FlickrUser {
+	form.Set("method", "flickr.test.login")
+	form.Set("format", "json")
+	form.Set("nojsoncallback", "1")
+
+	data, err := apiGet()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	// setup the consumer key and secret from the confis
-	oauthClient.Credentials = config.Consumer
-
-	photos := getPhotos()
-
-	fmt.Println("length = ", len(*photos))
+	return &data.User
 }
