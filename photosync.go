@@ -12,6 +12,8 @@ import (
 	"sync"
 )
 
+type PhotosMap map[string]Photo
+
 type Config struct {
 	Consumer oauth.Credentials
 	Access oauth.Credentials
@@ -120,16 +122,19 @@ func getAllPages(fn func(*Response)) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("got page 1")
+	fmt.Print("\rloading: ",int((float32(1)/float32(data.Data.Pages))*100),"%")
 	wg.Add(data.Data.Pages)
-	go func() {
+	//go func() {
+	func() {
 		defer wg.Done()
 		fn(data)
 	}()
 
 	// get the rest of the pages
 	for page := 2; page <= data.Data.Pages; page++ {
-		go func(page int) {
+		// comment out the parallel requesting as the flickr api seems occasionally return a dup page response
+		//go func(page int) { 
+		func(page int) { 
 			defer wg.Done()
 
 			form.Set("page", strconv.Itoa(page))
@@ -139,23 +144,24 @@ func getAllPages(fn func(*Response)) {
 				log.Fatal(err)
 			}
 
-			fmt.Println("got page ",page)
+			fmt.Print("\rloading: ",int((float32(page)/float32(data.Data.Pages))*100),"%")
 
 			fn(data)
 		}(page)
 	}
 
 	wg.Wait()
+	fmt.Println("")
 }
 
-func GetPhotos(flickrUserId string) (*map[string]Photo) {
+func GetPhotos(flickrUserId string) (*PhotosMap) {
 	form.Set("method", "flickr.photos.search")
 	form.Set("format", "json")
 	form.Set("nojsoncallback", "1")
 	form.Set("user_id", flickrUserId)
 	form.Set("per_page", "500") // max page size
 
-	photos := make(map[string]Photo)
+	photos := make(PhotosMap)
 
 	getAllPages(func(data *Response) {
 		// extract into photos map
