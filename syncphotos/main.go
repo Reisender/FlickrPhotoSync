@@ -24,7 +24,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	photos := fl.GetPhotos(user.Id)
+	photos, err := fl.GetPhotos(user)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Println(len(*photos),"photos found")
 }

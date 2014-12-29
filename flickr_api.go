@@ -56,9 +56,12 @@ type FlickrAPI struct {
 
 func NewFlickrAPI() *FlickrAPI {
 	return &FlickrAPI{
-		config: config,
+		config: config, // config the value is set in photosync.go
 		apiBase: "https://api.flickr.com/services/rest",
-		form: url.Values{},
+		form: url.Values{ // default querystring values
+			"format": {"json"},
+			"nojsoncallback": {"1"},
+		},
 		oauthClient: oauth.Client {
 			TemporaryCredentialRequestURI: "https://api.flickr.com/services/oauth/request_token",
 			ResourceOwnerAuthorizationURI: "https://api.flickr.com/services/oauth/authorize",
@@ -68,30 +71,29 @@ func NewFlickrAPI() *FlickrAPI {
 	}
 }
 
-func (this *FlickrAPI) GetPhotos(flickrUserId string) (*PhotosMap) {
+func (this *FlickrAPI) GetPhotos(user *FlickrUser) (*PhotosMap, error) {
 	this.form.Set("method", "flickr.photos.search")
-	this.form.Set("format", "json")
-	this.form.Set("nojsoncallback", "1")
-	this.form.Set("user_id", flickrUserId)
+	this.form.Set("user_id", user.Id)
 	defer this.form.Del("user_id") // remove from form values when done
+
+	// needed for getAllPages
 	this.form.Set("per_page", "500") // max page size
+	defer this.form.Del("per_page") // remove from form values when done
 
 	photos := make(PhotosMap)
 
-	this.getAllPages(func(data *Response) {
+	err := this.getAllPages(func(data *Response) {
 		// extract into photos map
 		for _, img := range data.Data.Photos {
 			photos[img.Title] = img
 		}
 	})
 
-	return &photos
+	return &photos, err
 }
 
 func (this *FlickrAPI) GetLogin() (*FlickrUser, error) {
 	this.form.Set("method", "flickr.test.login")
-	this.form.Set("format", "json")
-	this.form.Set("nojsoncallback", "1")
 
 	data, err := this.apiGet()
 	if err != nil {
@@ -103,8 +105,6 @@ func (this *FlickrAPI) GetLogin() (*FlickrUser, error) {
 
 func (this *FlickrAPI) SetTitle(p *Photo, title string) error {
 	this.form.Set("method", "flickr.photos.setMeta")
-	this.form.Set("format", "json")
-	this.form.Set("nojsoncallback", "1")
 
 	this.form.Set("photo_id", string(p.Id))
 	defer this.form.Del("photo_id") // remove from form values when done
@@ -150,7 +150,7 @@ func (this *FlickrAPI) apiGet() (*Response, error) {
 	return &resp, nil
 }
 
-func (this *FlickrAPI) getAllPages(fn func(*Response)) {
+func (this *FlickrAPI) getAllPages(fn func(*Response)) error {
 	var wg sync.WaitGroup
 
 	data, err := this.apiGet()
@@ -187,4 +187,6 @@ func (this *FlickrAPI) getAllPages(fn func(*Response)) {
 
 	wg.Wait()
 	fmt.Println("")
+
+	return nil
 }
