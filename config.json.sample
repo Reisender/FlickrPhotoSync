@@ -6,5 +6,6 @@
   "access": {
     "token":"",
     "secret":""
-  }
+  },
+  "watch_dir": "/dir/to/watch"
 }

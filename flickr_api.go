@@ -58,7 +58,7 @@ type FlickrUser struct {
 }
 
 type FlickrAPI struct {
-	config OauthConfig
+	config PhotosyncConfig
 	FlickrUserId string `json:"flickr_user_id"`
 	apiBase string
 	form url.Values

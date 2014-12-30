@@ -22,7 +22,14 @@ func addExtention(api *photosync.FlickrAPI, p *photosync.Photo) {
 
 	fmt.Println("updating title for ",p.Title, "=>", newTitle)
 
-	//api.SetTitle(p, newTitle)
+	api.SetTitle(p, newTitle)
+}
+
+func removeExtention(api *photosync.FlickrAPI, p *photosync.Photo) {
+	parts := strings.Split(p.Title,".")
+	fmt.Println("renaming to",parts[0])
+
+	api.SetTitle(p, parts[0])
 }
 
 func download(api *photosync.FlickrAPI, info *photosync.PhotoInfo, p *photosync.Photo) {
@@ -74,34 +81,9 @@ func main() {
 	fmt.Println(len(*photos),"photos found")
 
 
-	// see if we should fix the titles with a file extension
-	var ans string
-	for k, v := range *photos {
-		if !strings.Contains(k,".") {
-			ask: for {
-				switch ans {
-				case "y":
-					ans = "" // reset the answer for the next image
-					addExtention(fl,&v)
-					break ask // we are done with this ask
-				case "all":
-					addExtention(fl,&v)
-					break ask
-				case "n":
-					ans = "" // reset the answer for the next image
-					fallthrough
-				case "none":
-					break ask
-				case "quit":
-					return
-				default:
-					fmt.Println(k, " is missing the extension")
-					fmt.Print("would you like to add?\n(y/n/all/none/quit) :")
-					fmt.Scanln(&ans)
-				}
-			}
-		}
-		//break
-	}
+	// now walk the directory
+	photosync.Sync(fl,photos)
+
+
 	fmt.Println("good bye")
 }
