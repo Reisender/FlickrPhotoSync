@@ -83,7 +83,7 @@ type FlickrAPI struct {
 func NewFlickrAPI() *FlickrAPI {
 	return &FlickrAPI{
 		config: config, // config the value is set in photosync.go
-		apiBase: "https://api.flickr.com/services/rest",
+		apiBase: "https://api.flickr.com/services",
 		form: url.Values{ // default querystring values
 			"format": {"json"},
 			"nojsoncallback": {"1"},
@@ -264,7 +264,7 @@ func (this *FlickrAPI) Download(info *PhotoInfo, p *Photo) {
 
 func (this *FlickrAPI) apiGet() (*FlickrApiResponse, error) {
 	resp := FlickrApiResponse{}
-	r, err := this.oauthClient.Get(http.DefaultClient, &this.config.Access, this.apiBase, this.form)
+	r, err := this.oauthClient.Get(http.DefaultClient, &this.config.Access, this.apiBase+"/rest", this.form)
 	if err != nil {
 		log.Fatal(err)
 	}
