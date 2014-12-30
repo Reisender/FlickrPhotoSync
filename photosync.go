@@ -41,8 +41,9 @@ func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
 	return existingCount, uploadedCount, filepath.Walk(config.WatchDir, func(path string, f os.FileInfo, err error) error {
 		if !f.IsDir() { // make sure we aren't operating on a directory
 
-			ext := strings.ToUpper(filepath.Ext(f.Name()))
-			if ext == ".JPG" || ext == ".MOV" || ext == ".MP4" {
+			ext := filepath.Ext(f.Name())
+			extUpper := strings.ToUpper(ext)
+			if extUpper == ".JPG" || extUpper == ".MOV" || extUpper == ".MP4" {
 				fname := strings.Split(f.Name(),ext)
 				key := strings.Join(fname[:len(fname)-1],ext)
 				fmt.Println(path)
@@ -50,10 +51,13 @@ func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
 				_, exists := (*photos)[key]
 
 				if !exists {
-					fmt.Println("|==========| 100%")
+					fmt.Print("|=====")
 
 					if !dryrun {
 						if _, err := api.Upload(path, f); err != nil { return err }
+						fmt.Println("=====| 100%")
+					} else {
+						fmt.Println("=====| 100% --+ dry run +--")
 					}
 
 					uploadedCount++
