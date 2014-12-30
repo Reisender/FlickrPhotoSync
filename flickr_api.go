@@ -229,7 +229,6 @@ func (this *FlickrAPI) Upload(path string, file os.FileInfo) (*FlickrUploadRespo
 	xr := FlickrUploadResponse{}
 	if err := xml.Unmarshal(body, &xr); err != nil { return nil, err }
 
-	fmt.Println(xr.Status)
 	if xr.Status != "ok" {
 		return nil, Error{"failed status on upload"}
 	}
