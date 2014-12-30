@@ -4,61 +4,12 @@ import (
 	"fmt"
 	"log"
 	"flag"
-	"strings"
 	"github.com/Reisender/photosync"
-
-	"os"
-	"io"
-	"net/http"
 )
-
-func addExtention(api *photosync.FlickrAPI, p *photosync.Photo) {
-	info, _ := api.GetInfo(p)
-	ext, err := api.GetExtention(info)
-	if err != nil {
-		log.Fatal(err)
-	}
-	newTitle := p.Title+"."+ext
-
-	fmt.Println("updating title for ",p.Title, "=>", newTitle)
-
-	api.SetTitle(p, newTitle)
-}
-
-func removeExtention(api *photosync.FlickrAPI, p *photosync.Photo) {
-	parts := strings.Split(p.Title,".")
-	fmt.Println("renaming to",parts[0])
-
-	api.SetTitle(p, parts[0])
-}
-
-func download(api *photosync.FlickrAPI, info *photosync.PhotoInfo, p *photosync.Photo) {
-	sizes, _ := api.GetSizes(p)
-	i, _ := api.GetInfo(p)
-	ext, _ := api.GetExtention(i)
-
-	for _, v := range *sizes {
-		if (info.Media == "video" && v.Label == "Video Original") || (info.Media == "photo" && v.Label == "Original") {
-			out, err := os.Create(p.Title+"."+ext)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			r, err := http.Get(v.Source)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer r.Body.Close()
-
-			n, err := io.Copy(out, r.Body)
-
-			fmt.Println("written ",n)
-		}
-	}
-}
 
 func main() {
 	configPath := flag.String("config", "config.json", "Path to configuration file containing the application's credentials.")
+	dryrun := flag.Bool("dryrun", false, "dry run means don't actually upload files")
 
 	flag.Parse()
 
@@ -78,12 +29,18 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(len(*photos),"photos found")
+	fmt.Println(len(*photos),"Flickr photos found")
 
+	if *dryrun { fmt.Println("--+ Dry Run +--") }
 
 	// now walk the directory
-	photosync.Sync(fl,photos)
+	excnt, newcnt, err := photosync.Sync(fl,photos,*dryrun)
+	if err != nil {
+		log.Fatal(err)
+	}
 
+	if *dryrun { fmt.Println("--+ Dry Run +--") }
 
-	fmt.Println("good bye")
+	fmt.Println(excnt, " existing")
+	fmt.Println(newcnt, " uploaded")
 }

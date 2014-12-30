@@ -1,15 +1,20 @@
 package photosync
 
 import (
+	"os"
+	"io"
 	"fmt"
 	"log"
 	"net/url"
 	"net/http"
 	"io/ioutil"
 	"encoding/json"
+	"encoding/xml"
 	"strconv"
 	"sync"
 	"github.com/garyburd/go-oauth/oauth"
+	"mime/multipart"
+	"bytes"
 )
 
 
@@ -48,6 +53,12 @@ type FlickrApiResponse struct {
 	SizeData struct {
 		Sizes []PhotoSize `json:"size"`
 	} `json:"sizes"`
+}
+
+type FlickrUploadResponse struct {
+	XMLName xml.Name `xml:"rsp"`
+	Status string `xml:"stat,attr"`
+	PhotoId string `xml:"photoid"`
 }
 
 type FlickrUser struct {
@@ -173,9 +184,83 @@ func (this *FlickrAPI) SetTitle(p *Photo, title string) error {
 	return err
 }
 
+func (this *FlickrAPI) Upload(path string, file os.FileInfo) (*FlickrUploadResponse, error) {
+	// Prepare a form that you will submit to that URL.
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+
+	// Add your image file
+	f, err := os.Open(path)
+	if err != nil { return nil, err }
+
+	fw, err := w.CreateFormFile("photo", file.Name())
+	if err != nil { return nil, err }
+
+	if _, err = io.Copy(fw, f); err != nil { return nil, err }
+
+	// close this to get the terminating boundary
+	w.Close()
+
+	// create the request
+	req, err := http.NewRequest("POST", this.apiBase+"/upload/", &b)
+	if err != nil { return nil, err }
+
+	// set the content type for the mutlipart
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	// add the oauth sig as well
+	req.Header.Set("Authorization", this.oauthClient.AuthorizationHeader(&this.config.Access, "POST", req.URL, url.Values{}))
+
+	// do the actual post
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil { return nil, err }
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil { return nil, err }
+
+	// Check the response
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("bad status: %s", resp.Status)
+	}
+
+
+	xr := FlickrUploadResponse{}
+	if err := xml.Unmarshal(body, &xr); err != nil { return nil, err }
+
+	fmt.Println(xr.Status)
+	if xr.Status != "ok" {
+		return nil, Error{"failed status on upload"}
+	}
+
+	return &xr, nil
+}
+
+func (this *FlickrAPI) Download(info *PhotoInfo, p *Photo) {
+	sizes, _ := this.GetSizes(p)
+	ext, _ := this.GetExtention(info)
+
+	for _, v := range *sizes {
+		if (info.Media == "video" && v.Label == "Video Original") || (info.Media == "photo" && v.Label == "Original") {
+			out, err := os.Create(p.Title+"."+ext)
+			if err != nil { log.Fatal(err) }
+
+			r, err := http.Get(v.Source)
+			if err != nil { log.Fatal(err) }
+
+			defer r.Body.Close()
+
+			n, err := io.Copy(out, r.Body)
+
+			fmt.Println("written ",n)
+		}
+	}
+}
+
+
 
 // ***** Private Functions *****
-
 
 func (this *FlickrAPI) apiGet() (*FlickrApiResponse, error) {
 	resp := FlickrApiResponse{}
@@ -225,7 +310,7 @@ func (this *FlickrAPI) getAllPages(fn func(*FlickrApiResponse)) error {
 	for page := 2; page <= data.Data.Pages; page++ {
 		// comment out the parallel requesting as the flickr api seems occasionally return a dup page response
 		//go func(page int) { 
-		func(page int) { 
+		func(page int) {
 			defer wg.Done()
 
 			this.form.Set("page", strconv.Itoa(page))

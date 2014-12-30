@@ -34,47 +34,35 @@ func LoadConfig(configPath *string) error {
 	return json.Unmarshal(b, &config)
 }
 
-func checkFile(path string, f os.FileInfo, err error) error {
-	ext := strings.ToUpper(filepath.Ext(f.Name()))
+func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
+	existingCount := 0
+	uploadedCount := 0
 
-	if ext == ".JPG" || ext == ".MOV" || ext == ".MP4" {
-		fname := strings.Split(f.Name(),ext)
-		key := strings.Join(fname[:len(fname)-1],ext)
-		fmt.Print("checking:", key)
+	return existingCount, uploadedCount, filepath.Walk(config.WatchDir, func(path string, f os.FileInfo, err error) error {
+		if !f.IsDir() { // make sure we aren't operating on a directory
 
+			ext := strings.ToUpper(filepath.Ext(f.Name()))
+			if ext == ".JPG" || ext == ".MOV" || ext == ".MP4" {
+				fname := strings.Split(f.Name(),ext)
+				key := strings.Join(fname[:len(fname)-1],ext)
+				fmt.Println(path)
 
+				_, exists := (*photos)[key]
 
-		fmt.Println("")
-	}
-	return nil
-}
+				if !exists {
+					fmt.Println("|==========| 100%")
 
-func Sync(api *FlickrAPI, photos *PhotosMap) error {
-	// walk the directory
-	fmt.Println(config.WatchDir)
+					if !dryrun {
+						if _, err := api.Upload(path, f); err != nil { return err }
+					}
 
-	err := filepath.Walk(config.WatchDir, func(path string, f os.FileInfo, err error) error {
-		ext := strings.ToUpper(filepath.Ext(f.Name()))
-
-		if ext == ".JPG" || ext == ".MOV" || ext == ".MP4" {
-			fname := strings.Split(f.Name(),ext)
-			key := strings.Join(fname[:len(fname)-1],ext)
-			fmt.Print("checking: ", key)
-
-			_, exists := (*photos)[key]
-
-			if exists {
-				fmt.Print(" exists")
-			} else {
-				fmt.Print(" need to upload")
+					uploadedCount++
+				} else {
+					existingCount++
+				}
 			}
-
-			fmt.Println("")
 		}
+
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
