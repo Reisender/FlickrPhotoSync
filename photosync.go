@@ -19,7 +19,7 @@ type OauthConfig struct {
 
 type PhotosyncConfig struct {
 	OauthConfig
-	WatchDir string `json:"watch_dir"`
+	WatchDir []string `json:"watch_dir"`
 }
 
 var config PhotosyncConfig
@@ -38,35 +38,43 @@ func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
 	existingCount := 0
 	uploadedCount := 0
 
-	return existingCount, uploadedCount, filepath.Walk(config.WatchDir, func(path string, f os.FileInfo, err error) error {
-		if !f.IsDir() { // make sure we aren't operating on a directory
+	for _, dir := range config.WatchDir {
+		err := filepath.Walk(dir, func(path string, f os.FileInfo, err error) error {
+			if !f.IsDir() { // make sure we aren't operating on a directory
 
-			ext := filepath.Ext(f.Name())
-			extUpper := strings.ToUpper(ext)
-			if extUpper == ".JPG" || extUpper == ".MOV" || extUpper == ".MP4" {
-				fname := strings.Split(f.Name(),ext)
-				key := strings.Join(fname[:len(fname)-1],ext)
-				fmt.Println(path)
+				ext := filepath.Ext(f.Name())
+				extUpper := strings.ToUpper(ext)
+				if extUpper == ".JPG" || extUpper == ".MOV" || extUpper == ".MP4" {
+					fname := strings.Split(f.Name(),ext)
+					key := strings.Join(fname[:len(fname)-1],ext)
+					fmt.Println(path)
 
-				_, exists := (*photos)[key]
+					_, exists := (*photos)[key]
 
-				if !exists {
-					fmt.Print("|=====")
+					if !exists {
+						fmt.Print("|=====")
 
-					if !dryrun {
-						if _, err := api.Upload(path, f); err != nil { return err }
-						fmt.Println("=====| 100%")
+						if !dryrun {
+							if _, err := api.Upload(path, f); err != nil { return err }
+							fmt.Println("=====| 100%")
+						} else {
+							fmt.Println("=====| 100% --+ dry run +--")
+						}
+
+						uploadedCount++
 					} else {
-						fmt.Println("=====| 100% --+ dry run +--")
+						existingCount++
 					}
-
-					uploadedCount++
-				} else {
-					existingCount++
 				}
 			}
-		}
 
-		return nil
-	})
+			return nil
+		})
+
+		if err != nil {
+			return existingCount, uploadedCount, err
+		}
+	}
+
+	return existingCount, uploadedCount, nil
 }

@@ -7,5 +7,8 @@
     "token":"",
     "secret":""
   },
-  "watch_dir": "/dir/to/watch"
+  "watch_dir": [
+    "/dir/to/watch",
+    "/another/dir/to/watch"
+  ]
 }
