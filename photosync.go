@@ -68,7 +68,15 @@ func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
 						fmt.Print("|=====")
 
 						if !dryrun {
+
+							if extUpper == ".JPG" {
+								tmppath, done, er := FixExif(path, f, err)
+								path = tmppath // update the path to the potentially new path
+								defer done()
+								if err != nil { return er }
+							}
 							if _, err := api.Upload(path, f); err != nil { return err }
+
 							fmt.Println("=====| 100%")
 						} else {
 							fmt.Println("=====| 100% --+ dry run +--")
@@ -92,6 +100,12 @@ func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
 	return existingCount, uploadedCount, nil
 }
 
+//
+// Checks the EXIF data for JPGs and returns the path to either the original or the fixed JPG file.
+// The 2nd return value should be called when use of the JPG is complete.
+// workingFile, done, err := FixExif(...)
+// defer done()
+//
 func FixExif(path string, f os.FileInfo, err error) (string, func(), error) {
 	ext := filepath.Ext(f.Name())
 	extUpper := strings.ToUpper(ext)
