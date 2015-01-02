@@ -3,6 +3,7 @@ package photosync
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"github.com/garyburd/go-oauth/oauth"
 	"io/ioutil"
 	"encoding/json"
@@ -21,6 +22,20 @@ type PhotosyncConfig struct {
 	OauthConfig
 	WatchDir []string `json:"watch_dir"`
 }
+
+type exifToolOutput struct {
+	SourceFile string
+	ExifTool struct {
+		Warning string
+	}
+	Ifd struct {
+		Orientation string
+		Make string
+		Model string
+		ModifyDate string
+	} `json:"IFD0"`
+}
+
 
 // Load the consumer key and secret in from the config file
 func LoadConfig(configPath *string,config *PhotosyncConfig) error {
@@ -75,4 +90,42 @@ func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
 	}
 
 	return existingCount, uploadedCount, nil
+}
+
+func FixExif(path string, f os.FileInfo, err error) (string, func(), error) {
+	ext := filepath.Ext(f.Name())
+	extUpper := strings.ToUpper(ext)
+	noop := func() {}
+
+
+	if extUpper == ".JPG" {
+		// check for valid exif data
+		out, err := exec.Command("exiftool","-a","-u","-g1","-json",path).CombinedOutput()
+		if err != nil { return "", noop, err }
+
+		exif := make([]exifToolOutput,1)
+		if err := json.Unmarshal(out, &exif); err != nil { return "", noop, err }
+
+		if len(exif[0].ExifTool.Warning) > 0 {
+			// we have an exif error
+			if len(exif[0].Ifd.ModifyDate) > 0 {
+				// we have a valid date already so just fix exif
+
+				// create tmp file and copy
+				tmpfile, err := ioutil.TempFile("",f.Name()+".")
+				if err != nil { return "", noop, err }
+
+				tmpfilePath := tmpfile.Name() // ensure it's a new file for the sake of
+				os.Remove(tmpfile.Name())
+
+				_, errr := exec.Command("exiftool","-exif:all=","-tagsfromfile","@","-all:all","-unsafe","-o",tmpfilePath,path).CombinedOutput()
+				if errr != nil { return "", noop, errr }
+
+				// return the callback function that should get called when use of this image is complete
+				return tmpfilePath, func() { os.Remove(tmpfilePath) }, errr
+			}
+		}
+	}
+
+	return path, noop, nil
 }
