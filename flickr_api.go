@@ -80,9 +80,9 @@ type FlickrAPI struct {
 // ***** Public Functions *****
 
 
-func NewFlickrAPI() *FlickrAPI {
+func NewFlickrAPI(config *PhotosyncConfig) *FlickrAPI {
 	return &FlickrAPI{
-		config: config, // config the value is set in photosync.go
+		config: *config, // config the value is set in photosync.go
 		apiBase: "https://api.flickr.com/services",
 		form: url.Values{ // default querystring values
 			"format": {"json"},

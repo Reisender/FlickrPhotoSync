@@ -22,23 +22,21 @@ type PhotosyncConfig struct {
 	WatchDir []string `json:"watch_dir"`
 }
 
-var config PhotosyncConfig
-
 // Load the consumer key and secret in from the config file
-func LoadConfig(configPath *string) error {
+func LoadConfig(configPath *string,config *PhotosyncConfig) error {
 	b, err := ioutil.ReadFile(*configPath)
 	if err != nil {
 		return err
 	}
 
-	return json.Unmarshal(b, &config)
+	return json.Unmarshal(b, config)
 }
 
 func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
 	existingCount := 0
 	uploadedCount := 0
 
-	for _, dir := range config.WatchDir {
+	for _, dir := range api.config.WatchDir {
 		err := filepath.Walk(dir, func(path string, f os.FileInfo, err error) error {
 			if !f.IsDir() { // make sure we aren't operating on a directory
 

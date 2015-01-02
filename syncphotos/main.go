@@ -13,11 +13,13 @@ func main() {
 
 	flag.Parse()
 
-	if err := photosync.LoadConfig(configPath); err != nil {
+	config := photosync.PhotosyncConfig{}
+
+	if err := photosync.LoadConfig(configPath,&config); err != nil {
 		log.Fatalf("Error reading configuration, %v", err)
 	}
 
-	fl := photosync.NewFlickrAPI()
+	fl := photosync.NewFlickrAPI(&config)
 
 	user, err := fl.GetLogin()
 	if err != nil {
