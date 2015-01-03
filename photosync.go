@@ -22,6 +22,7 @@ type OauthConfig struct {
 type PhotosyncConfig struct {
 	OauthConfig
 	WatchDir []string `json:"watch_dir"`
+	FilenameTimeFormats []string `json:"filename_time_formats"`
 }
 
 type exifToolOutput struct {
@@ -146,16 +147,19 @@ func FixExif(title string, path string, f os.FileInfo, err error) (string, func(
 			// they are done uploading the file so let's set it's date
 
 			// start with the file name
-			t, er := time.Parse("20060102_150405", title)
-			if er == nil {
-				fmt.Printf("set time from file name: %s\n",t.Format(flickrTimeLayout))
-				api.SetDate(photoId, f.ModTime().Format(flickrTimeLayout)) // eat the error as this is optional
-			} else {
-
-				// fall back to the mod time
-				fmt.Printf("set time to: %s\n",f.ModTime().Format(flickrTimeLayout))
-				api.SetDate(photoId, f.ModTime().Format(flickrTimeLayout)) // eat the error as this is optional
+			for _, tf := range api.config.FilenameTimeFormats {
+				t, err := time.Parse(tf, title)
+				if err == nil {
+					// yessss... use it
+					fmt.Printf("set time from file name: %s\n",t.Format(flickrTimeLayout))
+					api.SetDate(photoId, f.ModTime().Format(flickrTimeLayout)) // eat the error as this is optional
+					return // we are done
+				}
 			}
+
+			// fall back to the mod time
+			fmt.Printf("set time to: %s\n",f.ModTime().Format(flickrTimeLayout))
+			api.SetDate(photoId, f.ModTime().Format(flickrTimeLayout)) // eat the error as this is optional
 
 		}, nil
 	}
