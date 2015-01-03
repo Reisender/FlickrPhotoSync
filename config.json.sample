@@ -10,5 +10,9 @@
   "watch_dir": [
     "/dir/to/watch",
     "/another/dir/to/watch"
+  ],
+  "filename_time_formats": [
+    "20060102_150405",
+    "PICT_20060102_150405"
   ]
 }
