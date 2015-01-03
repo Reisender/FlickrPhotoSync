@@ -17,6 +17,7 @@ import (
 	"bytes"
 )
 
+const flickrTimeLayout = "2006-01-02 15:04:05"
 
 type Photo struct {
 	Id string
@@ -178,6 +179,20 @@ func (this *FlickrAPI) SetTitle(p *Photo, title string) error {
 
 	this.form.Set("title", title)
 	defer this.form.Del("title")
+
+	_, err := this.apiGet()
+
+	return err
+}
+
+func (this *FlickrAPI) SetDate(photoId string, date string) error {
+	this.form.Set("method", "flickr.photos.setDates")
+
+	this.form.Set("photo_id", photoId)
+	defer this.form.Del("photo_id") // remove from form values when done
+
+	this.form.Set("date_taken", date)
+	defer this.form.Del("date_taken")
 
 	_, err := this.apiGet()
 

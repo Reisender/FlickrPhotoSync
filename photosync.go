@@ -2,6 +2,7 @@ package photosync
 
 import (
 	"fmt"
+	"time"
 	"os"
 	"os/exec"
 	"github.com/garyburd/go-oauth/oauth"
@@ -69,13 +70,13 @@ func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
 
 						if !dryrun {
 
-							if extUpper == ".JPG" {
-								tmppath, done, er := FixExif(path, f, err)
-								path = tmppath // update the path to the potentially new path
-								defer done()
-								if err != nil { return er }
-							}
-							if _, err := api.Upload(path, f); err != nil { return err }
+							tmppath, done, er := FixExif(key, path, f, err)
+							path = tmppath // update the path to the potentially new path
+							if er != nil { return er }
+							res, err := api.Upload(path, f)
+							if err != nil { return err }
+
+							defer done(api, res.PhotoId)
 
 							fmt.Println("=====| 100%")
 						} else {
@@ -106,10 +107,10 @@ func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
 // workingFile, done, err := FixExif(...)
 // defer done()
 //
-func FixExif(path string, f os.FileInfo, err error) (string, func(), error) {
+func FixExif(title string, path string, f os.FileInfo, err error) (string, func(api *FlickrAPI, photoId string), error) {
 	ext := filepath.Ext(f.Name())
 	extUpper := strings.ToUpper(ext)
-	noop := func() {}
+	noop := func(api *FlickrAPI, photoId string) {}
 
 
 	if extUpper == ".JPG" {
@@ -136,9 +137,27 @@ func FixExif(path string, f os.FileInfo, err error) (string, func(), error) {
 				if errr != nil { return "", noop, errr }
 
 				// return the callback function that should get called when use of this image is complete
-				return tmpfilePath, func() { os.Remove(tmpfilePath) }, errr
+				return tmpfilePath, func(api *FlickrAPI, photoId string) {os.Remove(tmpfilePath) }, errr
 			}
 		}
+	} else if extUpper == ".MOV" || extUpper == ".MP4" {
+		// always set to the file's modified date
+		return path, func(api *FlickrAPI, photoId string) {
+			// they are done uploading the file so let's set it's date
+
+			// start with the file name
+			t, er := time.Parse("20060102_150405", title)
+			if er == nil {
+				fmt.Printf("set time from file name: %s\n",t.Format(flickrTimeLayout))
+				api.SetDate(photoId, f.ModTime().Format(flickrTimeLayout)) // eat the error as this is optional
+			} else {
+
+				// fall back to the mod time
+				fmt.Printf("set time to: %s\n",f.ModTime().Format(flickrTimeLayout))
+				api.SetDate(photoId, f.ModTime().Format(flickrTimeLayout)) // eat the error as this is optional
+			}
+
+		}, nil
 	}
 
 	return path, noop, nil
