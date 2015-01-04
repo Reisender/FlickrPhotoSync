@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"flag"
+	"os"
 	"os/user"
 	"github.com/Reisender/photosync"
 )
@@ -20,6 +21,12 @@ func main() {
 
 	// consolidate options
 	*dryrun = *dryrun || *dry_run
+
+	// ensure the config file exists
+	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
+		fmt.Printf("config file not found: %s", configPath)
+		return
+	}
 
 	config := photosync.PhotosyncConfig{}
 

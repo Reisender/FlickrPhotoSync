@@ -54,6 +54,12 @@ func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
 	uploadedCount := 0
 
 	for _, dir := range api.config.WatchDir {
+		// ensure the path exists
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+				fmt.Printf("no such file or directory: %s", dir)
+				continue
+		}
+
 		err := filepath.Walk(dir, func(path string, f os.FileInfo, err error) error {
 			if !f.IsDir() { // make sure we aren't operating on a directory
 
