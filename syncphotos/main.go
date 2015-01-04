@@ -4,14 +4,22 @@ import (
 	"fmt"
 	"log"
 	"flag"
+	"os/user"
 	"github.com/Reisender/photosync"
 )
 
 func main() {
-	configPath := flag.String("config", "config.json", "Path to configuration file containing the application's credentials.")
+	u, _ := user.Current()
+	defaultConfPath := u.HomeDir + "/.syncphotos.conf.json"
+
+	configPath := flag.String("config", defaultConfPath, "Path to configuration file containing the application's credentials.")
+	dry_run := flag.Bool("dry-run", false, "dry run means don't actually upload files")
 	dryrun := flag.Bool("dryrun", false, "dry run means don't actually upload files")
 
 	flag.Parse()
+
+	// consolidate options
+	*dryrun = *dryrun || *dry_run
 
 	config := photosync.PhotosyncConfig{}
 
