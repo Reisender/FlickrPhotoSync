@@ -15,7 +15,7 @@
     {
       "prefix": ["IMG_","PICT_"],
       "format": "20060102_150405",
-      "postfix": ["(0)","(1)","_Richtone(HDR)"]
+      "postfix": ["(0)","(1)","_HDR","_Richtone(HDR)"]
     }
   ]
 }
