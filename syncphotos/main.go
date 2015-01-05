@@ -54,13 +54,14 @@ func main() {
 	if *dryrun { fmt.Println("--+ Dry Run +--") }
 
 	// now walk the directory
-	excnt, newcnt, err := photosync.Sync(fl,photos,videos,*dryrun)
+	excnt, newcnt, errCnt, err := photosync.Sync(fl,photos,videos,*dryrun)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(errCnt,err)
 	}
 
 	if *dryrun { fmt.Println("--+ Dry Run +--") }
 
 	fmt.Println(excnt, " existing")
 	fmt.Println(newcnt, " uploaded")
+	fmt.Println(errCnt, " failed")
 }

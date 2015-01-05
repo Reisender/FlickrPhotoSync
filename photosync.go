@@ -49,9 +49,10 @@ func LoadConfig(configPath *string,config *PhotosyncConfig) error {
 	return json.Unmarshal(b, config)
 }
 
-func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun bool) (int, int, error) {
+func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun bool) (int, int, int, error) {
 	existingCount := 0
 	uploadedCount := 0
+	errorCount := 0
 
 	for _, dir := range api.config.WatchDir {
 		// ensure the path exists
@@ -85,9 +86,9 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun bool) (in
 
 							tmppath, done, er := FixExif(key, path, f, err)
 							path = tmppath // update the path to the potentially new path
-							if er != nil { return er }
+							if er != nil { errorCount++; return nil }
 							res, err := api.Upload(path, f)
-							if err != nil { return err }
+							if err != nil { errorCount++; return nil }
 
 							defer done(api, res.PhotoId)
 
@@ -107,11 +108,11 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun bool) (in
 		})
 
 		if err != nil {
-			return existingCount, uploadedCount, err
+			return existingCount, uploadedCount, errorCount, err
 		}
 	}
 
-	return existingCount, uploadedCount, nil
+	return existingCount, uploadedCount, errorCount, nil
 }
 
 func getTimeFromTitle(api *FlickrAPI, title string) (*time.Time, error) {
