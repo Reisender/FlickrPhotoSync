@@ -7,9 +7,13 @@
     "token":"",
     "secret":""
   },
-  "watch_dir": [
-    "/dir/to/watch",
-    "/another/dir/to/watch"
+  "directories": [
+    {
+      "dir": "/dir/to/watch",
+      "tags": "instagram"
+    }, {
+      "dir": "/another/dir/to/watch"
+    }
   ],
   "filename_time_formats": [
     {

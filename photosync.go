@@ -21,8 +21,13 @@ type OauthConfig struct {
 
 type PhotosyncConfig struct {
 	OauthConfig
-	WatchDir []string `json:"watch_dir"`
+	WatchDir []WatchDirConfig `json:"directories"`
 	FilenameTimeFormats []FilenameTimeFormat `json:"filename_time_formats"`
+}
+
+type WatchDirConfig struct {
+	Dir string
+	Tags string
 }
 
 type FilenameTimeFormat struct {
@@ -62,12 +67,12 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun bool) (in
 
 	for _, dir := range api.config.WatchDir {
 		// ensure the path exists
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-				fmt.Printf("no such file or directory: %s", dir)
+		if _, err := os.Stat(dir.Dir); os.IsNotExist(err) {
+				fmt.Printf("no such file or directory: %s", dir.Dir)
 				continue
 		}
 
-		err := filepath.Walk(dir, func(path string, f os.FileInfo, err error) error {
+		err := filepath.Walk(dir.Dir, func(path string, f os.FileInfo, err error) error {
 			if !f.IsDir() { // make sure we aren't operating on a directory
 
 				ext := filepath.Ext(f.Name())
