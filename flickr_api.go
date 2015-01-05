@@ -140,7 +140,7 @@ func (this *FlickrAPI) Search(form *url.Values) (*PhotosMap, error) {
 func (this *FlickrAPI) GetLogin() (*FlickrUser, error) {
 	this.form.Set("method", "flickr.test.login")
 
-	data, err := this.apiGet()
+	data, err := this.get()
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func (this *FlickrAPI) GetInfo(p *Photo) (*PhotoInfo, error) {
 	this.form.Set("photo_id", p.Id)
 	defer this.form.Del("photo_id") // remove from form values when done
 
-	data, err := this.apiGet()
+	data, err := this.get()
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func (this *FlickrAPI) GetSizes(p *Photo) (*[]PhotoSize, error) {
 	this.form.Set("photo_id", p.Id)
 	defer this.form.Del("photo_id") // remove from form values when done
 
-	data, err := this.apiGet()
+	data, err := this.get()
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (this *FlickrAPI) SetTitle(p *Photo, title string) error {
 	this.form.Set("title", title)
 	defer this.form.Del("title")
 
-	_, err := this.apiGet()
+	_, err := this.post()
 
 	return err
 }
@@ -210,7 +210,7 @@ func (this *FlickrAPI) SetDate(photoId string, date string) error {
 	this.form.Set("date_taken", date)
 	defer this.form.Del("date_taken")
 
-	_, err := this.apiGet()
+	_, err := this.get()
 
 	return err
 }
@@ -294,9 +294,34 @@ func (this *FlickrAPI) Download(info *PhotoInfo, p *Photo) error {
 
 // ***** Private Functions *****
 
-func (this *FlickrAPI) apiGet() (*FlickrApiResponse, error) {
+func (this *FlickrAPI) get() (*FlickrApiResponse, error) {
+	return this.do("GET")
+}
+
+func (this *FlickrAPI) post() (*FlickrApiResponse, error) {
+	return this.do("POST")
+}
+
+func (this *FlickrAPI) put() (*FlickrApiResponse, error) {
+	return this.do("PUT")
+}
+
+func (this *FlickrAPI) del() (*FlickrApiResponse, error) {
+	return this.do("DELETE")
+}
+
+func (this *FlickrAPI) do(method string) (*FlickrApiResponse, error) {
 	resp := FlickrApiResponse{}
-	r, err := this.oauthClient.Get(http.DefaultClient, &this.config.Access, this.apiBase+"/rest", this.form)
+	methodFunc := this.oauthClient.Get
+	switch method { // override the default method of get
+		case "POST":
+			methodFunc = this.oauthClient.Post
+		case "PUT":
+			methodFunc = this.oauthClient.Put
+		case "DELETE":
+			methodFunc = this.oauthClient.Delete
+	}
+	r, err := methodFunc(http.DefaultClient, &this.config.Access, this.apiBase+"/rest", this.form)
 	if err != nil { return nil, err }
 
 	defer r.Body.Close()
@@ -324,7 +349,7 @@ func (this *FlickrAPI) apiGet() (*FlickrApiResponse, error) {
 func (this *FlickrAPI) getAllPages(fn func(*FlickrApiResponse)) error {
 	var wg sync.WaitGroup
 
-	data, err := this.apiGet()
+	data, err := this.get()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -346,7 +371,7 @@ func (this *FlickrAPI) getAllPages(fn func(*FlickrApiResponse)) error {
 			this.form.Set("page", strconv.Itoa(page))
 			defer this.form.Del("page")
 
-			data, err := this.apiGet()
+			data, err := this.get()
 			if err != nil {
 				log.Fatal(err)
 			}
