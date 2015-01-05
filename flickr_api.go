@@ -167,7 +167,6 @@ func (this *FlickrAPI) GetInfo(p *Photo) (*PhotoInfo, error) {
 
 	data, err := this.apiGet()
 	if err != nil {
-		log.Fatal(err)
 		return nil, err
 	}
 
@@ -182,7 +181,6 @@ func (this *FlickrAPI) GetSizes(p *Photo) (*[]PhotoSize, error) {
 
 	data, err := this.apiGet()
 	if err != nil {
-		log.Fatal(err)
 		return nil, err
 	}
 
@@ -269,17 +267,17 @@ func (this *FlickrAPI) Upload(path string, file os.FileInfo) (*FlickrUploadRespo
 	return &xr, nil
 }
 
-func (this *FlickrAPI) Download(info *PhotoInfo, p *Photo) {
+func (this *FlickrAPI) Download(info *PhotoInfo, p *Photo) error {
 	sizes, _ := this.GetSizes(p)
 	ext, _ := this.GetExtention(info)
 
 	for _, v := range *sizes {
 		if (info.Media == "video" && v.Label == "Video Original") || (info.Media == "photo" && v.Label == "Original") {
 			out, err := os.Create(p.Title+"."+ext)
-			if err != nil { log.Fatal(err) }
+			if err != nil { return err }
 
 			r, err := http.Get(v.Source)
-			if err != nil { log.Fatal(err) }
+			if err != nil { return err }
 
 			defer r.Body.Close()
 
@@ -288,6 +286,8 @@ func (this *FlickrAPI) Download(info *PhotoInfo, p *Photo) {
 			fmt.Println("written ",n)
 		}
 	}
+
+	return nil
 }
 
 
@@ -297,19 +297,17 @@ func (this *FlickrAPI) Download(info *PhotoInfo, p *Photo) {
 func (this *FlickrAPI) apiGet() (*FlickrApiResponse, error) {
 	resp := FlickrApiResponse{}
 	r, err := this.oauthClient.Get(http.DefaultClient, &this.config.Access, this.apiBase+"/rest", this.form)
-	if err != nil {
-		log.Fatal(err)
-	}
+	if err != nil { return nil, err }
 
 	defer r.Body.Close()
 
 	if r.StatusCode != 200 {
-		log.Fatal(r.Status)
+		return nil, &Error{r.Status}
 	}
 
 	contents, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	err = json.Unmarshal(contents, &resp)
@@ -346,6 +344,7 @@ func (this *FlickrAPI) getAllPages(fn func(*FlickrApiResponse)) error {
 			defer wg.Done()
 
 			this.form.Set("page", strconv.Itoa(page))
+			defer this.form.Del("page")
 
 			data, err := this.apiGet()
 			if err != nil {

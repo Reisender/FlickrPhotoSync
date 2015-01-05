@@ -43,9 +43,9 @@ func main() {
 
 	var err error
 	var photos, videos *photosync.PhotosMap
-	videos, err = fl.GetVideos(user)
-	if err != nil { log.Fatal(err) }
 	photos, err = fl.GetPhotos(user)
+	if err != nil { log.Fatal(err) }
+	videos, err = fl.GetVideos(user)
 	if err != nil { log.Fatal(err) }
 
 	fmt.Println(len(*photos),"Flickr photos found")
