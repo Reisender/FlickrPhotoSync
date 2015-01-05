@@ -2,6 +2,7 @@ package photosync
 
 import (
 	"fmt"
+	"log"
 	"time"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strings"
+	"github.com/go-fsnotify/fsnotify"
 )
 
 type PhotosMap map[string]Photo
@@ -60,10 +62,10 @@ func LoadConfig(configPath *string,config *PhotosyncConfig) error {
 	return json.Unmarshal(b, config)
 }
 
-func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun bool) (int, int, int, error) {
-	existingCount := 0
-	uploadedCount := 0
-	errorCount := 0
+func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun, daemon bool) (int, int, int, error) {
+	exCnt := 0
+	upCnt := 0
+	errCnt := 0
 
 	for _, dir := range api.config.WatchDir {
 		// ensure the path exists
@@ -72,58 +74,111 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun bool) (in
 				continue
 		}
 
-		err := filepath.Walk(dir.Dir, func(path string, f os.FileInfo, err error) error {
-			if !f.IsDir() { // make sure we aren't operating on a directory
-
-				ext := filepath.Ext(f.Name())
-				extUpper := strings.ToUpper(ext)
-				if extUpper == ".JPG" || extUpper == ".MOV" || extUpper == ".MP4" {
-					fname := strings.Split(f.Name(),ext)
-					key := strings.Join(fname[:len(fname)-1],ext)
-					fmt.Println(path)
-
-					var exists bool
-
-					if extUpper == ".JPG" {
-						_, exists = (*photos)[key]
-					} else if extUpper == ".MOV" || extUpper == ".MP4" {
-						_, exists = (*videos)[key]
-					}
-
-					if !exists {
-						fmt.Print("|=====")
-
-						if !dryrun {
-
-							tmppath, done, er := FixExif(key, path, f, err)
-							path = tmppath // update the path to the potentially new path
-							if er != nil { errorCount++; return nil }
-							res, err := api.Upload(path, f)
-							if err != nil { errorCount++; return nil }
-
-							defer done(api, res.PhotoId)
-
-							fmt.Println("=====| 100%")
-						} else {
-							fmt.Println("=====| 100% --+ dry run +--")
-						}
-
-						uploadedCount++
-					} else {
-						existingCount++
-					}
-				}
-			}
-
-			return nil
+		err := filepath.Walk(dir.Dir, func (path string, f os.FileInfo, err error) error {
+			return processFile(api, path, f, photos, videos, &exCnt, &upCnt, &errCnt, dryrun)
 		})
 
 		if err != nil {
-			return existingCount, uploadedCount, errorCount, err
+			return exCnt, upCnt, errCnt, err
 		}
 	}
 
-	return existingCount, uploadedCount, errorCount, nil
+	// start the daemon
+	if daemon {
+		log.Println("starting...")
+
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		done := make(chan bool)
+
+		go func() {
+			for {
+				select {
+				case event := <-watcher.Events:
+					//log.Println("event:", event)
+					if event.Op & fsnotify.Create == fsnotify.Create {
+						log.Println("created file:", event.Name)
+						f, err := os.Stat(event.Name)
+						if err != nil {
+							log.Println("error getting file info for ", event.Name)
+							continue
+						}
+						processFile(api, event.Name, f, photos, videos, &exCnt, &upCnt, &errCnt, dryrun)
+					}
+				case err := <-watcher.Errors:
+					log.Println("error:", err)
+				}
+			}
+		}()
+
+		for _, dir := range api.config.WatchDir {
+			// ensure the path exists
+			if _, err := os.Stat(dir.Dir); os.IsNotExist(err) {
+					fmt.Printf("no such file or directory: %s", dir.Dir)
+					continue
+			}
+
+			err = watcher.Add(dir.Dir)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+		}
+
+		<-done
+
+	}
+
+	return exCnt, upCnt, errCnt, nil
+}
+
+func processFile(api *FlickrAPI, path string, f os.FileInfo, photos, videos *PhotosMap, exCnt, upCnt, errCnt *int, dryrun bool) error {
+	if !f.IsDir() { // make sure we aren't operating on a directory
+
+		ext := filepath.Ext(f.Name())
+		extUpper := strings.ToUpper(ext)
+		if extUpper == ".JPG" || extUpper == ".MOV" || extUpper == ".MP4" {
+			fname := strings.Split(f.Name(),ext)
+			key := strings.Join(fname[:len(fname)-1],ext)
+			fmt.Println(path)
+
+			var exists bool
+
+			if extUpper == ".JPG" {
+				_, exists = (*photos)[key]
+			} else if extUpper == ".MOV" || extUpper == ".MP4" {
+				_, exists = (*videos)[key]
+			}
+
+			if !exists {
+				fmt.Print("|=====")
+
+				if !dryrun {
+
+					tmppath, done, er := FixExif(key, path, f)
+					path = tmppath // update the path to the potentially new path
+					if er != nil { *errCnt++; return nil }
+					res, err := api.Upload(path, f)
+					if err != nil { *errCnt++; return nil }
+
+					defer done(api, res.PhotoId)
+
+					fmt.Println("=====| 100%")
+				} else {
+					fmt.Println("=====| 100% --+ dry run +--")
+				}
+
+				*upCnt++
+			} else {
+				*exCnt++
+			}
+		}
+	}
+
+	return nil
 }
 
 func getTimeFromTitle(api *FlickrAPI, title string) (*time.Time, error) {
@@ -160,7 +215,7 @@ func getTimeFromTitle(api *FlickrAPI, title string) (*time.Time, error) {
 // workingFile, done, err := FixExif(...)
 // defer done()
 //
-func FixExif(title string, path string, f os.FileInfo, err error) (string, func(api *FlickrAPI, photoId string), error) {
+func FixExif(title string, path string, f os.FileInfo) (string, func(api *FlickrAPI, photoId string), error) {
 	ext := filepath.Ext(f.Name())
 	extUpper := strings.ToUpper(ext)
 	var timeFromFilename *time.Time

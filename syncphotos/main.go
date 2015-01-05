@@ -17,6 +17,8 @@ func main() {
 	dry_run := flag.Bool("dry-run", false, "dry run means don't actually upload files")
 	dryrun := flag.Bool("dryrun", false, "dry run means don't actually upload files")
 
+	daemon := flag.Bool("daemon", false, "run as a daemon that watches the dirs in the config for newly created files")
+
 	flag.Parse()
 
 	// consolidate options
@@ -54,7 +56,7 @@ func main() {
 	if *dryrun { fmt.Println("--+ Dry Run +--") }
 
 	// now walk the directory
-	excnt, newcnt, errCnt, err := photosync.Sync(fl,photos,videos,*dryrun)
+	excnt, newcnt, errCnt, err := photosync.Sync(fl,photos,videos,*dryrun, *daemon)
 	if err != nil {
 		log.Fatal(errCnt,err)
 	}
@@ -65,3 +67,4 @@ func main() {
 	fmt.Println(newcnt, " uploaded")
 	fmt.Println(errCnt, " failed")
 }
+
