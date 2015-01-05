@@ -99,13 +99,31 @@ func NewFlickrAPI(config *PhotosyncConfig) *FlickrAPI {
 }
 
 func (this *FlickrAPI) GetPhotos(user *FlickrUser) (*PhotosMap, error) {
-	this.form.Set("method", "flickr.photos.search")
 	this.form.Set("user_id", user.Id)
 	defer this.form.Del("user_id") // remove from form values when done
 
+	this.form.Set("media", "photos")
+	defer this.form.Del("media") // remove from form values when done
+
+	return this.Search(&this.form)
+}
+
+func (this *FlickrAPI) GetVideos(user *FlickrUser) (*PhotosMap, error) {
+	this.form.Set("user_id", user.Id)
+	defer this.form.Del("user_id") // remove from form values when done
+
+	this.form.Set("media", "videos")
+	defer this.form.Del("media") // remove from form values when done
+
+	return this.Search(&this.form)
+}
+
+func (this *FlickrAPI) Search(form *url.Values) (*PhotosMap, error) {
+	form.Set("method", "flickr.photos.search")
+
 	// needed for getAllPages
-	this.form.Set("per_page", "500") // max page size
-	defer this.form.Del("per_page") // remove from form values when done
+	form.Set("per_page", "500") // max page size
+	defer form.Del("per_page") // remove from form values when done
 
 	photos := make(PhotosMap)
 

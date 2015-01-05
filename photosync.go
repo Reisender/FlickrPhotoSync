@@ -49,7 +49,7 @@ func LoadConfig(configPath *string,config *PhotosyncConfig) error {
 	return json.Unmarshal(b, config)
 }
 
-func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
+func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun bool) (int, int, error) {
 	existingCount := 0
 	uploadedCount := 0
 
@@ -70,7 +70,13 @@ func Sync(api *FlickrAPI, photos *PhotosMap, dryrun bool) (int, int, error) {
 					key := strings.Join(fname[:len(fname)-1],ext)
 					fmt.Println(path)
 
-					_, exists := (*photos)[key]
+					var exists bool
+
+					if extUpper == ".JPG" {
+						_, exists = (*photos)[key]
+					} else if extUpper == ".MOV" || extUpper == ".MP4" {
+						_, exists = (*videos)[key]
+					}
 
 					if !exists {
 						fmt.Print("|=====")

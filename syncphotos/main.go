@@ -36,22 +36,25 @@ func main() {
 
 	fl := photosync.NewFlickrAPI(&config)
 
-	user, err := fl.GetLogin()
-	if err != nil {
-		log.Fatal(err)
+	user, errr := fl.GetLogin()
+	if errr != nil {
+		log.Fatal(errr)
 	}
 
-	photos, err := fl.GetPhotos(user)
-	if err != nil {
-		log.Fatal(err)
-	}
+	var err error
+	var photos, videos *photosync.PhotosMap
+	videos, err = fl.GetVideos(user)
+	if err != nil { log.Fatal(err) }
+	photos, err = fl.GetPhotos(user)
+	if err != nil { log.Fatal(err) }
 
 	fmt.Println(len(*photos),"Flickr photos found")
+	fmt.Println(len(*videos),"Flickr videos found")
 
 	if *dryrun { fmt.Println("--+ Dry Run +--") }
 
 	// now walk the directory
-	excnt, newcnt, err := photosync.Sync(fl,photos,*dryrun)
+	excnt, newcnt, err := photosync.Sync(fl,photos,videos,*dryrun)
 	if err != nil {
 		log.Fatal(err)
 	}
