@@ -22,7 +22,13 @@ type OauthConfig struct {
 type PhotosyncConfig struct {
 	OauthConfig
 	WatchDir []string `json:"watch_dir"`
-	FilenameTimeFormats []string `json:"filename_time_formats"`
+	FilenameTimeFormats []FilenameTimeFormat `json:"filename_time_formats"`
+}
+
+type FilenameTimeFormat struct {
+	Format string
+	Prefix []string
+	Postfix []string
 }
 
 type exifToolOutput struct {
@@ -117,10 +123,28 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun bool) (in
 
 func getTimeFromTitle(api *FlickrAPI, title string) (*time.Time, error) {
 	for _, tf := range api.config.FilenameTimeFormats {
-		t, err := time.Parse(tf, title)
-		if err == nil {
-			return &t, nil
+		var tmp = title
+
+		// check prefix
+		for _, p := range tf.Prefix {
+			if tmp[:len(p)] == p {
+				tmp = tmp[len(p):]
+				break // we found our prefix
+			}
 		}
+
+		// check postfix
+		for _, p := range tf.Postfix {
+			if tmp[len(tmp)-len(p):] == p {
+				tmp = tmp[:len(tmp)-len(p)]
+				break // we found our postfix
+			}
+		}
+		fmt.Println("using title",tmp)
+
+		// parse what's left
+		t, err := time.Parse(tf.Format, tmp)
+		if err == nil { return &t, nil }
 	}
 	return nil, Error{"no timestamp in title"}
 }

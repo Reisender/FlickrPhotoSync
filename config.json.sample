@@ -12,7 +12,10 @@
     "/another/dir/to/watch"
   ],
   "filename_time_formats": [
-    "20060102_150405",
-    "PICT_20060102_150405"
+    {
+      "prefix": ["IMG_","PICT_"],
+      "format": "20060102_150405",
+      "postfix": ["(0)","(1)","_Richtone(HDR)"]
+    }
   ]
 }
