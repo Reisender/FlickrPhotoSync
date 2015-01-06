@@ -10,29 +10,17 @@ import (
 )
 
 func main() {
-	u, _ := user.Current()
-	defaultConfPath := u.HomeDir + "/.syncphotos.conf.json"
-
-	configPath := flag.String("config", defaultConfPath, "Path to configuration file containing the application's credentials.")
-	dry_run := flag.Bool("dry-run", false, "dry run means don't actually upload files")
-	dryrun := flag.Bool("dryrun", false, "dry run means don't actually upload files")
-
-	daemon := flag.Bool("daemon", false, "run as a daemon that watches the dirs in the config for newly created files")
-
-	flag.Parse()
-
-	// consolidate options
-	*dryrun = *dryrun || *dry_run
+	opt := getOptions()
 
 	// ensure the config file exists
-	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
-		fmt.Printf("config file not found: %s", configPath)
+	if _, err := os.Stat(opt.ConfigPath); os.IsNotExist(err) {
+		fmt.Printf("config file not found: %s", opt.ConfigPath)
 		return
 	}
 
 	config := photosync.PhotosyncConfig{}
 
-	if err := photosync.LoadConfig(configPath,&config); err != nil {
+	if err := photosync.LoadConfig(&opt.ConfigPath,&config); err != nil {
 		log.Fatalf("Error reading configuration, %v", err)
 	}
 
@@ -53,18 +41,38 @@ func main() {
 	fmt.Println(len(*photos),"Flickr photos found")
 	fmt.Println(len(*videos),"Flickr videos found")
 
-	if *dryrun { fmt.Println("--+ Dry Run +--") }
+	if opt.Dryrun { fmt.Println("--+ Dry Run +--") }
 
 	// now walk the directory
-	excnt, newcnt, errCnt, err := photosync.Sync(fl,photos,videos,*dryrun, *daemon)
+	excnt, newcnt, errCnt, err := photosync.Sync(fl,photos,videos,opt)
 	if err != nil {
 		log.Fatal(errCnt,err)
 	}
 
-	if *dryrun { fmt.Println("--+ Dry Run +--") }
+	if opt.Dryrun { fmt.Println("--+ Dry Run +--") }
 
 	fmt.Println(excnt, " existing")
 	fmt.Println(newcnt, " uploaded")
 	fmt.Println(errCnt, " failed")
+}
+
+func getOptions() *photosync.Options {
+	u, _ := user.Current()
+	defaultConfPath := u.HomeDir + "/.syncphotos.conf.json"
+
+	configPath := flag.String("config", defaultConfPath, "Path to configuration file containing the application's credentials.")
+	dry_run := flag.Bool("dry-run", false, "dry run means don't actually upload files")
+	dryrun := flag.Bool("dryrun", false, "dry run means don't actually upload files")
+
+	daemon := flag.Bool("daemon", false, "run as a daemon that watches the dirs in the config for newly created files")
+
+	retroTags := flag.Bool("retro-tags", false, "retroactively set the tags for images found in a folder with tags in the config")
+
+	flag.Parse()
+
+	// consolidate options
+	*dryrun = *dryrun || *dry_run
+
+	return &photosync.Options{ *configPath, *dryrun, *daemon, *retroTags }
 }
 

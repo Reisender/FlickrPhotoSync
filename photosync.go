@@ -14,6 +14,13 @@ import (
 	"github.com/go-fsnotify/fsnotify"
 )
 
+type Options struct {
+	ConfigPath string
+	Dryrun bool
+	Daemon bool
+	RetroTags bool
+}
+
 type PhotosMap map[string]Photo
 
 type OauthConfig struct {
@@ -62,7 +69,7 @@ func LoadConfig(configPath *string,config *PhotosyncConfig) error {
 	return json.Unmarshal(b, config)
 }
 
-func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun, daemon bool) (int, int, int, error) {
+func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (int, int, int, error) {
 	exCnt := 0
 	upCnt := 0
 	errCnt := 0
@@ -75,7 +82,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun, daemon b
 		}
 
 		err := filepath.Walk(dir.Dir, func (path string, f os.FileInfo, err error) error {
-			return processFile(api, &dir, path, f, photos, videos, &exCnt, &upCnt, &errCnt, dryrun)
+			return processFile(api, &dir, path, f, photos, videos, &exCnt, &upCnt, &errCnt, opt)
 		})
 
 		if err != nil {
@@ -84,7 +91,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun, daemon b
 	}
 
 	// start the daemon
-	if daemon {
+	if opt.Daemon {
 		log.Println("starting...")
 
 		watcher, err := fsnotify.NewWatcher()
@@ -117,7 +124,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun, daemon b
 						}
 
 
-						processFile(api, cfg, event.Name, f, photos, videos, &exCnt, &upCnt, &errCnt, dryrun)
+						processFile(api, cfg, event.Name, f, photos, videos, &exCnt, &upCnt, &errCnt, opt)
 					}
 				case err := <-watcher.Errors:
 					log.Println("error:", err)
@@ -148,7 +155,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun, daemon b
 	return exCnt, upCnt, errCnt, nil
 }
 
-func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo, photos, videos *PhotosMap, exCnt, upCnt, errCnt *int, dryrun bool) error {
+func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo, photos, videos *PhotosMap, exCnt, upCnt, errCnt *int, opt *Options) error {
 	if !f.IsDir() { // make sure we aren't operating on a directory
 
 		ext := filepath.Ext(f.Name())
@@ -159,11 +166,12 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 			fmt.Println(path)
 
 			var exists bool
+			var exPhoto Photo
 
 			if extUpper == ".JPG" {
-				_, exists = (*photos)[key]
+				exPhoto, exists = (*photos)[key]
 			} else if extUpper == ".MOV" || extUpper == ".MP4" {
-				_, exists = (*videos)[key]
+				exPhoto, exists = (*videos)[key]
 			}
 
 			if !exists {
@@ -171,7 +179,7 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 
 				tmppath, done, er := FixExif(key, path, f)
 
-				if !dryrun {
+				if !opt.Dryrun {
 
 					path = tmppath // update the path to the potentially new path
 					if er != nil { *errCnt++; return nil }
@@ -192,6 +200,17 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 
 				*upCnt++
 			} else {
+				// still apply retroactive tags
+				if opt.RetroTags && len(dir.Tags) > 0 {
+					fmt.Print("assign tags: ",dir.Tags)
+					if !opt.Dryrun {
+						api.AddTags(exPhoto.Id, dir.Tags)
+					} else {
+						fmt.Print(" --+ dry run +--")
+					}
+					fmt.Println()
+				}
+
 				*exCnt++
 			}
 		}
@@ -219,7 +238,7 @@ func getTimeFromTitle(api *FlickrAPI, title string) (*time.Time, error) {
 				break // we found our postfix
 			}
 		}
-		fmt.Println("using title",tmp)
+		//fmt.Println("using title",tmp)
 
 		// parse what's left
 		t, err := time.Parse(tf.Format, tmp)
