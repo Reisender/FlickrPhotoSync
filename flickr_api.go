@@ -187,6 +187,20 @@ func (this *FlickrAPI) GetSizes(p *Photo) (*[]PhotoSize, error) {
 	return &data.SizeData.Sizes, nil
 }
 
+func (this *FlickrAPI) AddTags(photoId string, tags string) error {
+	this.form.Set("method", "flickr.photos.addTags")
+
+	this.form.Set("photo_id", photoId)
+	defer this.form.Del("photo_id") // remove from form values when done
+
+	this.form.Set("tags", tags)
+	defer this.form.Del("tags")
+
+	_, err := this.post()
+
+	return err
+}
+
 func (this *FlickrAPI) SetTitle(p *Photo, title string) error {
 	this.form.Set("method", "flickr.photos.setMeta")
 

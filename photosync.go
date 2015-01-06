@@ -75,7 +75,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun, daemon b
 		}
 
 		err := filepath.Walk(dir.Dir, func (path string, f os.FileInfo, err error) error {
-			return processFile(api, path, f, photos, videos, &exCnt, &upCnt, &errCnt, dryrun)
+			return processFile(api, &dir, path, f, photos, videos, &exCnt, &upCnt, &errCnt, dryrun)
 		})
 
 		if err != nil {
@@ -93,6 +93,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun, daemon b
 		}
 
 		done := make(chan bool)
+		dirCfgs := make(map[string]WatchDirConfig)
 
 		go func() {
 			for {
@@ -106,7 +107,17 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun, daemon b
 							log.Println("error getting file info for ", event.Name)
 							continue
 						}
-						processFile(api, event.Name, f, photos, videos, &exCnt, &upCnt, &errCnt, dryrun)
+
+						// get the dir config
+						var cfg *WatchDirConfig
+						for dir, dirCfg := range dirCfgs {
+							if event.Name[:len(dir)] == dir {
+								cfg = &dirCfg
+							}
+						}
+
+
+						processFile(api, cfg, event.Name, f, photos, videos, &exCnt, &upCnt, &errCnt, dryrun)
 					}
 				case err := <-watcher.Errors:
 					log.Println("error:", err)
@@ -120,6 +131,8 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun, daemon b
 					fmt.Printf("no such file or directory: %s", dir.Dir)
 					continue
 			}
+
+			dirCfgs[dir.Dir] = dir // add to map of configs for the event handler to use
 
 			err = watcher.Add(dir.Dir)
 			if err != nil {
@@ -135,7 +148,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, dryrun, daemon b
 	return exCnt, upCnt, errCnt, nil
 }
 
-func processFile(api *FlickrAPI, path string, f os.FileInfo, photos, videos *PhotosMap, exCnt, upCnt, errCnt *int, dryrun bool) error {
+func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo, photos, videos *PhotosMap, exCnt, upCnt, errCnt *int, dryrun bool) error {
 	if !f.IsDir() { // make sure we aren't operating on a directory
 
 		ext := filepath.Ext(f.Name())
@@ -156,15 +169,21 @@ func processFile(api *FlickrAPI, path string, f os.FileInfo, photos, videos *Pho
 			if !exists {
 				fmt.Print("|=====")
 
+				tmppath, done, er := FixExif(key, path, f)
+
 				if !dryrun {
 
-					tmppath, done, er := FixExif(key, path, f)
 					path = tmppath // update the path to the potentially new path
 					if er != nil { *errCnt++; return nil }
 					res, err := api.Upload(path, f)
 					if err != nil { *errCnt++; return nil }
 
 					defer done(api, res.PhotoId)
+
+					// set the tags in config
+					if len(dir.Tags) > 0 {
+						api.AddTags(res.PhotoId, dir.Tags)
+					}
 
 					fmt.Println("=====| 100%")
 				} else {
