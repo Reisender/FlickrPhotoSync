@@ -37,6 +37,8 @@ type PhotosyncConfig struct {
 type WatchDirConfig struct {
 	Dir string
 	Tags string
+	TitlePrefix string `json:"title_prefix"`
+	TitlePostfix string `json:"title_postfix"`
 }
 
 type FilenameTimeFormat struct {
@@ -162,8 +164,11 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 		extUpper := strings.ToUpper(ext)
 		if extUpper == ".JPG" || extUpper == ".MOV" || extUpper == ".MP4" {
 			fname := strings.Split(f.Name(),ext)
-			key := strings.Join(fname[:len(fname)-1],ext)
+			title := strings.Join(fname[:len(fname)-1],ext)
 			fmt.Println(path)
+
+			// modify title base on config
+			key := dir.TitlePrefix + title + dir.TitlePostfix
 
 			var exists bool
 			var exPhoto Photo
@@ -177,7 +182,7 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 			if !exists {
 				fmt.Print("|=====")
 
-				tmppath, done, er := FixExif(key, path, f)
+				tmppath, done, er := FixExif(title, path, f)
 
 				if !opt.Dryrun {
 
@@ -191,6 +196,9 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 					// set the tags in config
 					if len(dir.Tags) > 0 {
 						api.AddTags(res.PhotoId, dir.Tags)
+						if key != title { // update the title with prefix and postfix based on dir config
+							api.SetTitle(res.PhotoId, key)
+						}
 					}
 
 					fmt.Println("=====| 100%")

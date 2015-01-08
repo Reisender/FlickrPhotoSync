@@ -10,7 +10,8 @@
   "directories": [
     {
       "dir": "/dir/to/watch",
-      "tags": "instagram"
+      "tags": "instagram",
+      "title_postfix": "_canon7D"
     }, {
       "dir": "/another/dir/to/watch"
     }
