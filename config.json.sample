@@ -11,9 +11,16 @@
     {
       "dir": "/dir/to/watch",
       "tags": "instagram",
-      "title_postfix": "_canon7D"
+      "title_prepend": "BEST_",
+      "title_append": "_canon7D"
     }, {
-      "dir": "/another/dir/to/watch"
+      "tags": "instagram {{folders}}",
+      "dir": "/another/dir/to/watch",
+      "title_append": "_{{exif_timestamp}}",
+      "UpdateOrigFile": true // update the filename with the title_prepend and title_append
+    },
+    {
+      "dir": "/min/settings/for/dir/to/watch"
     }
   ],
   "filename_time_formats": [

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strings"
+	"text/template"
 	"github.com/go-fsnotify/fsnotify"
 )
 
@@ -37,8 +38,12 @@ type PhotosyncConfig struct {
 type WatchDirConfig struct {
 	Dir string
 	Tags string
-	TitlePrefix string `json:"title_prefix"`
-	TitlePostfix string `json:"title_postfix"`
+	tagsTmpl *template.Template
+	TitlePrepend string `json:"title_prefix"`
+	titlePrependTmpl *template.Template
+	TitleAppend string `json:"title_postfix"`
+	titleAppendTmpl *template.Template
+	UpdateOrigFile bool `json:"update_orig_file"`
 }
 
 type FilenameTimeFormat struct {
@@ -47,7 +52,7 @@ type FilenameTimeFormat struct {
 	Postfix []string
 }
 
-type exifToolOutput struct {
+type ExifToolOutput struct {
 	SourceFile string
 	ExifTool struct {
 		Warning string
@@ -168,7 +173,7 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 			fmt.Println(path)
 
 			// modify title base on config
-			key := dir.TitlePrefix + title + dir.TitlePostfix
+			key := dir.TitlePrepend + title + dir.TitleAppend
 
 			var exists bool
 			var exPhoto Photo
@@ -255,6 +260,17 @@ func getTimeFromTitle(api *FlickrAPI, title string) (*time.Time, error) {
 	return nil, Error{"no timestamp in title"}
 }
 
+
+func GetExifData(path string) (*ExifToolOutput, error) {
+	out, err := exec.Command("exiftool","-a","-u","-g1","-json",path).CombinedOutput()
+	if err != nil { return nil, err }
+
+	exif := make([]ExifToolOutput,1)
+	if err := json.Unmarshal(out, &exif); err != nil { return nil, err }
+
+	return &exif[0], nil
+}
+
 //
 // Checks the EXIF data for JPGs and returns the path to either the original or the fixed JPG file.
 // The 2nd return value should be called when use of the JPG is complete.
@@ -293,15 +309,12 @@ func FixExif(title string, path string, f os.FileInfo) (string, func(api *Flickr
 
 	if extUpper == ".JPG" {
 		// check for valid exif data
-		out, err := exec.Command("exiftool","-a","-u","-g1","-json",path).CombinedOutput()
+		exif, err := GetExifData(path)
 		if err != nil { return "", _setDateTaken, err }
 
-		exif := make([]exifToolOutput,1)
-		if err := json.Unmarshal(out, &exif); err != nil { return "", _setDateTaken, err }
-
-		if len(exif[0].ExifTool.Warning) > 0 {
+		if len(exif.ExifTool.Warning) > 0 {
 			// we have an exif error
-			if len(exif[0].Ifd.ModifyDate) > 0 {
+			if len(exif.Ifd.ModifyDate) > 0 {
 				// we have a valid date already so just fix exif
 
 				// create tmp file and copy
