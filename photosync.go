@@ -11,9 +11,13 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strings"
-	"text/template"
 	"github.com/go-fsnotify/fsnotify"
 )
+
+// time formats
+const FilenameTimeLayout = "20060102_150405"
+const ExifTimeLayout = "2006:01:02 15:04:05"
+const FlickrTimeLayout = "2006-01-02 15:04:05"
 
 type Options struct {
 	ConfigPath string
@@ -31,19 +35,9 @@ type OauthConfig struct {
 
 type PhotosyncConfig struct {
 	OauthConfig
+	Filenames []FilenameConfig `json:"filenames"`
 	WatchDir []WatchDirConfig `json:"directories"`
 	FilenameTimeFormats []FilenameTimeFormat `json:"filename_time_formats"`
-}
-
-type WatchDirConfig struct {
-	Dir string
-	Tags string
-	tagsTmpl *template.Template
-	TitlePrepend string `json:"title_prefix"`
-	titlePrependTmpl *template.Template
-	TitleAppend string `json:"title_postfix"`
-	titleAppendTmpl *template.Template
-	UpdateOrigFile bool `json:"update_orig_file"`
 }
 
 type FilenameTimeFormat struct {
@@ -73,7 +67,21 @@ func LoadConfig(configPath *string,config *PhotosyncConfig) error {
 		return err
 	}
 
-	return json.Unmarshal(b, config)
+	if err := json.Unmarshal(b, config); err != nil {
+		return err
+	}
+
+	// precompile the filename regexps
+	for i := 0; i < len(config.Filenames); i++ {
+		config.Filenames[i].Load()
+	}
+
+	// create the templates
+	for i := 0; i < len(config.WatchDir); i++ {
+		config.WatchDir[i].CreateTemplates()
+	}
+
+	return nil
 }
 
 func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (int, int, int, error) {
@@ -167,13 +175,26 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 
 		ext := filepath.Ext(f.Name())
 		extUpper := strings.ToUpper(ext)
+
+		// rename file if needed
+		// check again all filename configs
+		for _, fncfg := range api.GetFilenamesConfig() {
+			newPath, changed := fncfg.GetNewPath(path)
+			if changed {
+				fmt.Println("rename to:", newPath)
+
+				if !opt.Dryrun {
+					os.Rename(path,newPath)
+				}
+
+				break // found our match to bail
+			}
+		}
+
 		if extUpper == ".JPG" || extUpper == ".MOV" || extUpper == ".MP4" {
 			fname := strings.Split(f.Name(),ext)
-			title := strings.Join(fname[:len(fname)-1],ext)
+			key := strings.Join(fname[:len(fname)-1],ext)
 			fmt.Println(path)
-
-			// modify title base on config
-			key := dir.TitlePrepend + title + dir.TitleAppend
 
 			var exists bool
 			var exPhoto Photo
@@ -187,7 +208,7 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 			if !exists {
 				fmt.Print("|=====")
 
-				tmppath, done, er := FixExif(title, path, f)
+				tmppath, done, er := FixExif(key, path, f)
 
 				if !opt.Dryrun {
 
@@ -201,9 +222,6 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 					// set the tags in config
 					if len(dir.Tags) > 0 {
 						api.AddTags(res.PhotoId, dir.Tags)
-						if key != title { // update the title with prefix and postfix based on dir config
-							api.SetTitle(res.PhotoId, key)
-						}
 					}
 
 					fmt.Println("=====| 100%")
@@ -289,8 +307,8 @@ func FixExif(title string, path string, f os.FileInfo) (string, func(api *Flickr
 
 		// check the file name
 		if timeFromFilename != nil {
-			fmt.Printf("set time from file name: %s\n",timeFromFilename.Format(flickrTimeLayout))
-			api.SetDate(photoId, timeFromFilename.Format(flickrTimeLayout)) // eat the error as this is optional
+			fmt.Printf("set time from file name: %s\n",timeFromFilename.Format(FlickrTimeLayout))
+			api.SetDate(photoId, timeFromFilename.Format(FlickrTimeLayout)) // eat the error as this is optional
 		}
 	}
 
@@ -301,8 +319,8 @@ func FixExif(title string, path string, f os.FileInfo) (string, func(api *Flickr
 		if timeFromFilename == nil {
 			// fall back to the mod time
 			// we do this for MOV's because there isn't exif data to use
-			fmt.Printf("set time to: %s\n",f.ModTime().Format(flickrTimeLayout))
-			api.SetDate(photoId, f.ModTime().Format(flickrTimeLayout)) // eat the error as this is optional
+			fmt.Printf("set time to: %s\n",f.ModTime().Format(FlickrTimeLayout))
+			api.SetDate(photoId, f.ModTime().Format(FlickrTimeLayout)) // eat the error as this is optional
 		}
 	}
 

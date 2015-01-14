@@ -17,8 +17,6 @@ import (
 	"bytes"
 )
 
-const flickrTimeLayout = "2006-01-02 15:04:05"
-
 type Photo struct {
 	Id string
 	Owner string
@@ -96,6 +94,10 @@ func NewFlickrAPI(config *PhotosyncConfig) *FlickrAPI {
 			Credentials: config.Consumer, // setup the consumer key and secret from the confis
 		},
 	}
+}
+
+func (this *FlickrAPI) GetFilenamesConfig() []FilenameConfig {
+	return this.config.Filenames
 }
 
 func (this *FlickrAPI) GetPhotos(user *FlickrUser) (*PhotosMap, error) {
