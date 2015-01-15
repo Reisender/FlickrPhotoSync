@@ -41,22 +41,21 @@ func (this *FilenameConfig) getModifiedTitle(title string, context DymanicValueC
 }
 
 
-func (this *FilenameConfig) GetNewPath(path string) (string, string, bool) {
+func (this *FilenameConfig) GetNewPath(path string, exif *ExifToolOutput) (string, string, bool) {
 	// pull out the filename and ext
 	dir, fname := filepath.Split(path)
 	ext := filepath.Ext(fname)
 	title := fname[:len(fname)-len(ext)]
 
-	exif, err := GetExifData(path)
-	if err != nil {
-		return path, title, false
-	}
-
-	if this.matchRegexp.MatchString(fname) {
-		//t, err := time.Parse( ExifTimeLayout, exif.Ifd.ModifyDate )
+	if exif == nil {
+		var err error
+		exif, err = GetExifData(path)
 		if err != nil {
 			return path, title, false
 		}
+	}
+
+	if this.matchRegexp.MatchString(fname) {
 		context := DymanicValueContext{
 			*this,
 			*exif,

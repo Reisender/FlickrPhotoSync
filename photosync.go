@@ -98,8 +98,18 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (i
 				continue
 		}
 
+		exifAry, er := GetAllExifData(dir.Dir)
+		if er != nil {
+			return renCnt, exCnt, upCnt, errCnt, er
+		}
+
+		exifs := make(map[string]ExifToolOutput)
+		for _, ex := range *exifAry {
+			exifs[ex.SourceFile] = ex
+		}
+
 		err := filepath.Walk(dir.Dir, func (path string, f os.FileInfo, err error) error {
-			return processFile(api, &dir, path, f, photos, videos, &renCnt, &exCnt, &upCnt, &errCnt, opt)
+			return processFile(api, &dir, path, f, &exifs, photos, videos, &renCnt, &exCnt, &upCnt, &errCnt, opt)
 		})
 
 		if err != nil {
@@ -141,7 +151,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (i
 						}
 
 
-						processFile(api, cfg, event.Name, f, photos, videos, &renCnt, &exCnt, &upCnt, &errCnt, opt)
+						processFile(api, cfg, event.Name, f, nil, photos, videos, &renCnt, &exCnt, &upCnt, &errCnt, opt)
 					}
 				case err := <-watcher.Errors:
 					log.Println("error:", err)
@@ -172,7 +182,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (i
 	return renCnt, exCnt, upCnt, errCnt, nil
 }
 
-func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo, photos, videos *PhotosMap, renCnt, exCnt, upCnt, errCnt *int, opt *Options) error {
+func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo, exifs *map[string]ExifToolOutput, photos, videos *PhotosMap, renCnt, exCnt, upCnt, errCnt *int, opt *Options) error {
 	if !f.IsDir() { // make sure we aren't operating on a directory
 
 		var newPath, newKey string
@@ -185,7 +195,11 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 		// rename file if needed
 		// check again all filename configs
 		for _, fncfg := range api.GetFilenamesConfig() {
-			newPath, newKey, changed = fncfg.GetNewPath(path)
+			var exif ExifToolOutput
+			if exifs != nil {
+				exif = (*exifs)[path]
+			}
+			newPath, newKey, changed = fncfg.GetNewPath(path, &exif)
 			if changed {
 				fmt.Println("rename to:", newPath)
 
@@ -286,13 +300,33 @@ func getTimeFromTitle(api *FlickrAPI, title string) (*time.Time, error) {
 
 
 func GetExifData(path string) (*ExifToolOutput, error) {
-	out, err := exec.Command("exiftool","-a","-u","-g1","-json",path).CombinedOutput()
+	exifs, err := GetAllExifData(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(*exifs) == 0 {
+		return nil, Error{ "no exif data found" }
+	}
+	return &(*exifs)[0], nil
+}
+
+func GetAllExifData(path string) (*[]ExifToolOutput, error) {
+	out, err := exec.Command("exiftool","-a","-u","-g1","-json","-r",path).Output()
+	foo := string(out)
+	final := ""
+	// kill new lines
+	final = strings.Replace(foo, "\n", "", -1)
+	out = []byte(final)
 	if err != nil { return nil, err }
 
-	exif := make([]ExifToolOutput,1)
-	if err := json.Unmarshal(out, &exif); err != nil { return nil, err }
+	var exif []ExifToolOutput
+	if err := json.Unmarshal(out, &exif); err != nil {
+		log.Fatal(final)
+		log.Fatal("unmarshal error: ",err)
+		return nil, err
+	}
 
-	return &exif[0], nil
+	return &exif, nil
 }
 
 //
