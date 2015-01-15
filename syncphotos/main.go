@@ -44,13 +44,14 @@ func main() {
 	if opt.Dryrun { fmt.Println("--+ Dry Run +--") }
 
 	// now walk the directory
-	excnt, newcnt, errCnt, err := photosync.Sync(fl,photos,videos,opt)
+	rencnt, excnt, newcnt, errCnt, err := photosync.Sync(fl,photos,videos,opt)
 	if err != nil {
 		log.Fatal(errCnt,err)
 	}
 
 	if opt.Dryrun { fmt.Println("--+ Dry Run +--") }
 
+	fmt.Println(rencnt, " renamed")
 	fmt.Println(excnt, " existing")
 	fmt.Println(newcnt, " uploaded")
 	fmt.Println(errCnt, " failed")
@@ -61,8 +62,11 @@ func getOptions() *photosync.Options {
 	defaultConfPath := u.HomeDir + "/.syncphotos.conf.json"
 
 	configPath := flag.String("config", defaultConfPath, "Path to configuration file containing the application's credentials.")
-	dry_run := flag.Bool("dry-run", false, "dry run means don't actually upload files")
-	dryrun := flag.Bool("dryrun", false, "dry run means don't actually upload files")
+	dry_run := flag.Bool("dry-run", false, "dry run means don't actually upload or rename files")
+	dryrun := flag.Bool("dryrun", false, "dry run means don't actually upload or rename files")
+
+	no_upload := flag.Bool("no-upload", false, "no-upload means don't actually upload files")
+	noupload := flag.Bool("noupload", false, "no-upload means don't actually upload files")
 
 	daemon := flag.Bool("daemon", false, "run as a daemon that watches the dirs in the config for newly created files")
 
@@ -72,7 +76,8 @@ func getOptions() *photosync.Options {
 
 	// consolidate options
 	*dryrun = *dryrun || *dry_run
+	*noupload = *noupload || *no_upload
 
-	return &photosync.Options{ *configPath, *dryrun, *daemon, *retroTags }
+	return &photosync.Options{ *configPath, *dryrun, *noupload, *daemon, *retroTags }
 }
 

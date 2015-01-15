@@ -22,6 +22,7 @@ const FlickrTimeLayout = "2006-01-02 15:04:05"
 type Options struct {
 	ConfigPath string
 	Dryrun bool
+	NoUpload bool
 	Daemon bool
 	RetroTags bool
 }
@@ -84,7 +85,8 @@ func LoadConfig(configPath *string,config *PhotosyncConfig) error {
 	return nil
 }
 
-func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (int, int, int, error) {
+func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (int, int, int, int, error) {
+	renCnt := 0
 	exCnt := 0
 	upCnt := 0
 	errCnt := 0
@@ -97,11 +99,11 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (i
 		}
 
 		err := filepath.Walk(dir.Dir, func (path string, f os.FileInfo, err error) error {
-			return processFile(api, &dir, path, f, photos, videos, &exCnt, &upCnt, &errCnt, opt)
+			return processFile(api, &dir, path, f, photos, videos, &renCnt, &exCnt, &upCnt, &errCnt, opt)
 		})
 
 		if err != nil {
-			return exCnt, upCnt, errCnt, err
+			return renCnt, exCnt, upCnt, errCnt, err
 		}
 	}
 
@@ -139,7 +141,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (i
 						}
 
 
-						processFile(api, cfg, event.Name, f, photos, videos, &exCnt, &upCnt, &errCnt, opt)
+						processFile(api, cfg, event.Name, f, photos, videos, &renCnt, &exCnt, &upCnt, &errCnt, opt)
 					}
 				case err := <-watcher.Errors:
 					log.Println("error:", err)
@@ -167,24 +169,31 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (i
 
 	}
 
-	return exCnt, upCnt, errCnt, nil
+	return renCnt, exCnt, upCnt, errCnt, nil
 }
 
-func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo, photos, videos *PhotosMap, exCnt, upCnt, errCnt *int, opt *Options) error {
+func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo, photos, videos *PhotosMap, renCnt, exCnt, upCnt, errCnt *int, opt *Options) error {
 	if !f.IsDir() { // make sure we aren't operating on a directory
 
-		ext := filepath.Ext(f.Name())
+		var newPath, newKey string
+		var changed bool
+		_, fname := filepath.Split(path)
+		ext := filepath.Ext(fname)
 		extUpper := strings.ToUpper(ext)
+		key := fname[:len(fname)-len(ext)]
 
 		// rename file if needed
 		// check again all filename configs
 		for _, fncfg := range api.GetFilenamesConfig() {
-			newPath, changed := fncfg.GetNewPath(path)
+			newPath, newKey, changed = fncfg.GetNewPath(path)
 			if changed {
 				fmt.Println("rename to:", newPath)
 
 				if !opt.Dryrun {
 					os.Rename(path,newPath)
+					path = newPath // swith to the new file
+					key = newKey
+					*renCnt++
 				}
 
 				break // found our match to bail
@@ -192,8 +201,6 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 		}
 
 		if extUpper == ".JPG" || extUpper == ".MOV" || extUpper == ".MP4" {
-			fname := strings.Split(f.Name(),ext)
-			key := strings.Join(fname[:len(fname)-1],ext)
 			fmt.Println(path)
 
 			var exists bool
@@ -208,9 +215,8 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 			if !exists {
 				fmt.Print("|=====")
 
-				tmppath, done, er := FixExif(key, path, f)
-
-				if !opt.Dryrun {
+				if !opt.Dryrun && !opt.NoUpload {
+					tmppath, done, er := FixExif(key, path, f)
 
 					path = tmppath // update the path to the potentially new path
 					if er != nil { *errCnt++; return nil }
@@ -234,7 +240,7 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 				// still apply retroactive tags
 				if opt.RetroTags && len(dir.Tags) > 0 {
 					fmt.Print("assign tags: ",dir.Tags)
-					if !opt.Dryrun {
+					if !opt.Dryrun && !opt.NoUpload {
 						api.AddTags(exPhoto.Id, dir.Tags)
 					} else {
 						fmt.Print(" --+ dry run +--")

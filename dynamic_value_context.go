@@ -6,7 +6,6 @@ import (
 
 // Context for dynamic values in the config
 type DymanicValueContext struct {
-	Foo string
 	File FilenameConfig
 	Exif ExifToolOutput
 }
