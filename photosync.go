@@ -244,10 +244,28 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 						api.AddTags(res.PhotoId, dir.Tags)
 					}
 
+					// add back in to photos and videos
+					newPhoto := Photo{
+						Id: res.PhotoId,
+						Owner: "",
+						Secret: "",
+						Title: key,
+					}
+
+					switch extUpper {
+					case ".JPG":
+						(*photos)[key] = newPhoto
+					case ".MOV":
+						fallthrough
+					case ".MP4":
+						(*videos)[key] = newPhoto
+					}
+
 					fmt.Println("=====| 100%")
 				} else {
 					fmt.Println("=====| 100% --+ dry run +--")
 				}
+
 
 				*upCnt++
 			} else {
