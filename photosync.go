@@ -207,6 +207,9 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 					os.Rename(path,newPath)
 					path = newPath // swith to the new file
 					key = newKey
+					var err error
+					f, err = os.Stat(path)
+					if err != nil { return err }
 					*renCnt++
 				}
 
