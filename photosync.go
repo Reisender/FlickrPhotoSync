@@ -182,24 +182,25 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (i
 	return renCnt, exCnt, upCnt, errCnt, nil
 }
 
-func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo, exifs *map[string]ExifToolOutput, photos, videos *PhotosMap, renCnt, exCnt, upCnt, errCnt *int, opt *Options) error {
+func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileInfo, exifs *map[string]ExifToolOutput, photos, videos *PhotosMap, renCnt, exCnt, upCnt, errCnt *int, opt *Options) error {
 	if !f.IsDir() { // make sure we aren't operating on a directory
 
 		var newPath, newKey string
 		var changed bool
-		_, fname := filepath.Split(path)
+		dir, fname := filepath.Split(path)
 		ext := filepath.Ext(fname)
 		extUpper := strings.ToUpper(ext)
 		key := fname[:len(fname)-len(ext)]
 
+		var exif ExifToolOutput
+		if exifs != nil {
+			exif = (*exifs)[path]
+		}
+
 		// rename file if needed
 		// check again all filename configs
 		for _, fncfg := range api.GetFilenamesConfig() {
-			var exif ExifToolOutput
-			if exifs != nil {
-				exif = (*exifs)[path]
-			}
-			newPath, newKey, changed = fncfg.GetNewPath(path, &exif)
+			newPath, newKey, changed = fncfg.GetNewPath(path, dirCfg, &exif)
 			if changed {
 				fmt.Println("rename to:", newPath)
 
@@ -243,8 +244,19 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 					defer done(api, res.PhotoId)
 
 					// set the tags in config
-					if len(dir.Tags) > 0 {
-						api.AddTags(res.PhotoId, dir.Tags)
+					if len(dirCfg.Tags) > 0 {
+						context := DymanicValueContext{
+							path: path,
+							dir: dir,
+							ext: ext,
+							title: key,
+							dirCfg: *dirCfg,
+							exif: exif,
+						}
+						tags, err := dirCfg.GetTags(context)
+						if err == nil {
+							api.AddTags(res.PhotoId, tags)
+						}
 					}
 
 					// add back in to photos and videos
@@ -273,10 +285,10 @@ func processFile(api *FlickrAPI, dir *WatchDirConfig, path string, f os.FileInfo
 				*upCnt++
 			} else {
 				// still apply retroactive tags
-				if opt.RetroTags && len(dir.Tags) > 0 {
-					fmt.Print("assign tags: ",dir.Tags)
+				if opt.RetroTags && len(dirCfg.Tags) > 0 {
+					fmt.Print("assign tags: ",dirCfg.Tags)
 					if !opt.Dryrun && !opt.NoUpload {
-						api.AddTags(exPhoto.Id, dir.Tags)
+						api.AddTags(exPhoto.Id, dirCfg.Tags)
 					} else {
 						fmt.Print(" --+ dry run +--")
 					}

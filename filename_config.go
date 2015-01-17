@@ -41,7 +41,7 @@ func (this *FilenameConfig) getModifiedTitle(title string, context DymanicValueC
 }
 
 
-func (this *FilenameConfig) GetNewPath(path string, exif *ExifToolOutput) (string, string, bool) {
+func (this *FilenameConfig) GetNewPath(path string, dirCfg *WatchDirConfig, exif *ExifToolOutput) (string, string, bool) {
 	// pull out the filename and ext
 	dir, fname := filepath.Split(path)
 	ext := filepath.Ext(fname)
@@ -57,8 +57,13 @@ func (this *FilenameConfig) GetNewPath(path string, exif *ExifToolOutput) (strin
 
 	if this.matchRegexp.MatchString(fname) {
 		context := DymanicValueContext{
-			*this,
-			*exif,
+			path: path,
+			dir: dir,
+			ext: ext,
+			title: title,
+			fileCfg: *this,
+			dirCfg: *dirCfg,
+			exif: *exif,
 		}
 		newTitle, _ := this.getModifiedTitle(title,context)
 		return dir+newTitle+ext, newTitle, true
