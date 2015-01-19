@@ -33,13 +33,26 @@ type PhotoInfo struct {
 	Media string
 }
 
+type PhotoSet struct {
+	Id string
+	Title string `json:"title[_content]"`
+}
+
 type PhotoSize struct {
 	Label string
 	Source string
 }
 
-type FlickrApiResponse struct {
+type FlickrBaseApiResponse struct {
 	Stat string
+}
+
+type FlickrAlbumsResponse struct {
+	FlickrBaseApiResponse
+}
+
+type FlickrApiResponse struct {
+	FlickrBaseApiResponse
 	Data struct {
 		Page int
 		Pages int

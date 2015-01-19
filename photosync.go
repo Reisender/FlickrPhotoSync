@@ -309,7 +309,7 @@ func getTimeFromTitle(api *FlickrAPI, title string) (*time.Time, error) {
 
 		// check prefix
 		for _, p := range tf.Prefix {
-			if tmp[:len(p)] == p {
+			if len(p) < len(tmp) && tmp[:len(p)] == p {
 				tmp = tmp[len(p):]
 				break // we found our prefix
 			}
@@ -317,7 +317,7 @@ func getTimeFromTitle(api *FlickrAPI, title string) (*time.Time, error) {
 
 		// check postfix
 		for _, p := range tf.Postfix {
-			if tmp[len(tmp)-len(p):] == p {
+			if len(p) < len(tmp) && tmp[len(tmp)-len(p):] == p {
 				tmp = tmp[:len(tmp)-len(p)]
 				break // we found our postfix
 			}
