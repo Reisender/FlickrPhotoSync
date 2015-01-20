@@ -155,7 +155,8 @@ func (this *FlickrAPI) Search(form *url.Values) (*PhotosMap, error) {
 func (this *FlickrAPI) GetLogin() (*FlickrUser, error) {
 	this.form.Set("method", "flickr.test.login")
 
-	data, err := this.get()
+	data := FlickrApiResponse{}
+	err := this.get(&data)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +181,8 @@ func (this *FlickrAPI) GetInfo(p *Photo) (*PhotoInfo, error) {
 	this.form.Set("photo_id", p.Id)
 	defer this.form.Del("photo_id") // remove from form values when done
 
-	data, err := this.get()
+	data := FlickrApiResponse{}
+	err := this.get(&data)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +196,8 @@ func (this *FlickrAPI) GetSizes(p *Photo) (*[]PhotoSize, error) {
 	this.form.Set("photo_id", p.Id)
 	defer this.form.Del("photo_id") // remove from form values when done
 
-	data, err := this.get()
+	data := FlickrApiResponse{}
+	err := this.get(&data)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +214,8 @@ func (this *FlickrAPI) AddTags(photoId, tags string) error {
 	this.form.Set("tags", tags)
 	defer this.form.Del("tags")
 
-	_, err := this.post()
+	data := FlickrApiResponse{}
+	err := this.post(&data)
 
 	return err
 }
@@ -225,7 +229,8 @@ func (this *FlickrAPI) SetTitle(photo_id, title string) error {
 	this.form.Set("title", title)
 	defer this.form.Del("title")
 
-	_, err := this.post()
+	data := FlickrApiResponse{}
+	err := this.post(&data)
 
 	return err
 }
@@ -239,7 +244,8 @@ func (this *FlickrAPI) SetDate(photoId, date string) error {
 	this.form.Set("date_taken", date)
 	defer this.form.Del("date_taken")
 
-	_, err := this.get()
+	data := FlickrApiResponse{}
+	err := this.get(&data)
 
 	return err
 }
@@ -323,24 +329,23 @@ func (this *FlickrAPI) Download(info *PhotoInfo, p *Photo) error {
 
 // ***** Private Functions *****
 
-func (this *FlickrAPI) get() (*FlickrApiResponse, error) {
-	return this.do("GET")
+func (this *FlickrAPI) get(resp interface{}) error {
+	return this.do("GET", resp)
 }
 
-func (this *FlickrAPI) post() (*FlickrApiResponse, error) {
-	return this.do("POST")
+func (this *FlickrAPI) post(resp interface{}) error {
+	return this.do("POST", resp)
 }
 
-func (this *FlickrAPI) put() (*FlickrApiResponse, error) {
-	return this.do("PUT")
+func (this *FlickrAPI) put(resp interface{}) error {
+	return this.do("PUT", resp)
 }
 
-func (this *FlickrAPI) del() (*FlickrApiResponse, error) {
-	return this.do("DELETE")
+func (this *FlickrAPI) del(resp interface{}) error {
+	return this.do("DELETE", resp)
 }
 
-func (this *FlickrAPI) do(method string) (*FlickrApiResponse, error) {
-	resp := FlickrApiResponse{}
+func (this *FlickrAPI) do(method string, resp interface{}) error {
 	methodFunc := this.oauthClient.Get
 	switch method { // override the default method of get
 		case "POST":
@@ -351,34 +356,49 @@ func (this *FlickrAPI) do(method string) (*FlickrApiResponse, error) {
 			methodFunc = this.oauthClient.Delete
 	}
 	r, err := methodFunc(http.DefaultClient, &this.config.Access, this.apiBase+"/rest", this.form)
-	if err != nil { return nil, err }
+	if err != nil { return err }
 
 	defer r.Body.Close()
 
 	if r.StatusCode != 200 {
-		return nil, &Error{r.Status}
+		return &Error{r.Status}
 	}
 
 	contents, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = json.Unmarshal(contents, &resp)
+	err = json.Unmarshal(contents, resp)
 	if err != nil {
-		return nil, err
-	}
-	if resp.Stat != "ok" {
-		return nil, &Error{ string(contents) }
+		return err
 	}
 
-	return &resp, nil
+	var stat string
+
+	switch f := resp.(type) {
+	case *FlickrApiResponse: // f is of type *foo
+		stat = f.Stat
+	case *FlickrBaseApiResponse: // f is of type *foo
+		stat = f.Stat
+	default: // f is some other type
+		// allow it to go through
+		stat = "ok"
+		// hope they know what they are doing
+	}
+
+	if stat != "ok" {
+		return &Error{ string(contents) }
+	}
+
+	return nil
 }
 
 func (this *FlickrAPI) getAllPages(fn func(*FlickrApiResponse)) error {
 	var wg sync.WaitGroup
 
-	data, err := this.get()
+	data := FlickrApiResponse{}
+	err := this.get(&data)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -387,7 +407,7 @@ func (this *FlickrAPI) getAllPages(fn func(*FlickrApiResponse)) error {
 	//go func() {
 	func() {
 		defer wg.Done()
-		fn(data)
+		fn(&data)
 	}()
 
 	// get the rest of the pages
@@ -400,14 +420,15 @@ func (this *FlickrAPI) getAllPages(fn func(*FlickrApiResponse)) error {
 			this.form.Set("page", strconv.Itoa(page))
 			defer this.form.Del("page")
 
-			data, err := this.get()
+			data := FlickrApiResponse{}
+			err := this.get(&data)
 			if err != nil {
 				log.Fatal(err)
 			}
 
 			fmt.Print("\rloading: ",int((float32(page)/float32(data.Data.Pages))*100),"%")
 
-			fn(data)
+			fn(&data)
 		}(page)
 	}
 
