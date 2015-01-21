@@ -339,22 +339,22 @@ func (this *FlickrAPI) getRaw() ([]byte, error) {
 func (this *FlickrAPI) post(resp interface{}) error {
 	return this.do("POST", resp)
 }
-func (this *FlickrAPI) postRaw(resp interface{}) error {
-	return this.doRaw("POST", resp)
+func (this *FlickrAPI) postRaw() ([]byte, error) {
+	return this.doRaw("POST")
 }
 
 func (this *FlickrAPI) put(resp interface{}) error {
 	return this.do("PUT", resp)
 }
-func (this *FlickrAPI) putRaw(resp interface{}) error {
-	return this.doRaw("PUT", resp)
+func (this *FlickrAPI) putRaw() ([]byte, error) {
+	return this.doRaw("PUT")
 }
 
 func (this *FlickrAPI) del(resp interface{}) error {
 	return this.do("DELETE", resp)
 }
-func (this *FlickrAPI) delRaw(resp interface{}) error {
-	return this.doRaw("DELETE", resp)
+func (this *FlickrAPI) delRaw() ([]byte, error) {
+	return this.doRaw("DELETE")
 }
 
 func (this *FlickrAPI) do(method string, resp interface{}) error {
