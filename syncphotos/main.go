@@ -33,13 +33,18 @@ func main() {
 
 	var err error
 	var photos, videos *photosync.PhotosMap
+	var albums *photosync.AlbumsMap
+
 	photos, err = fl.GetPhotos(user)
 	if err != nil { log.Fatal(err) }
 	videos, err = fl.GetVideos(user)
 	if err != nil { log.Fatal(err) }
+	albums, err = fl.GetAlbums(user)
+	if err != nil { log.Fatal(err) }
 
 	fmt.Println(len(*photos),"Flickr photos found")
 	fmt.Println(len(*videos),"Flickr videos found")
+	fmt.Println(len(*albums),"Flickr albums found")
 
 	if opt.Dryrun { fmt.Println("--+ Dry Run +--") }
 

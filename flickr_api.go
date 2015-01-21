@@ -17,6 +17,16 @@ import (
 	"bytes"
 )
 
+type Album struct {
+	Id string
+	Title struct {
+		Content string `json:"_content"`
+	} `json:"title"`
+}
+func (this Album) GetTitle() string {
+	return this.Title.Content
+}
+
 type Photo struct {
 	Id string
 	Owner string
@@ -54,16 +64,25 @@ func (this FlickrBaseApiResponse) Success() bool {
 	return this.Stat == "ok"
 }
 
+type flickrResponsePageInfo struct {
+	Page int
+	Pages int
+	Perpage int
+}
+
 type FlickrAlbumsResponse struct {
 	FlickrBaseApiResponse
+	Data struct {
+		flickrResponsePageInfo
+		Total int
+		Albums []Album `json:"photoset"`
+	} `json:"photosets"`
 }
 
 type FlickrApiResponse struct {
 	FlickrBaseApiResponse
 	Data struct {
-		Page int
-		Pages int
-		Perpage int
+		flickrResponsePageInfo
 		Total string
 		Photos []Photo `json:"photo"`
 	} `json:"photos"`
@@ -157,6 +176,29 @@ func (this *FlickrAPI) Search(form *url.Values) (*PhotosMap, error) {
 	})
 
 	return &photos, err
+}
+
+func (this *FlickrAPI) GetAlbums(user *FlickrUser) (*AlbumsMap, error) {
+	this.form.Set("method", "flickr.photosets.getList")
+
+	this.form.Set("user_id", user.Id)
+	defer this.form.Del("user_id") // remove from form values when done
+
+	// needed for getAllPages
+	this.form.Set("per_page", "500") // max page size
+	defer this.form.Del("per_page") // remove from form values when done
+
+	albums := make(AlbumsMap)
+
+	data := FlickrAlbumsResponse{}
+	err := this.get(&data)
+	if err != nil { return nil, err }
+
+	for _, alb := range data.Data.Albums {
+		albums[alb.GetTitle()] = alb
+	}
+
+	return &albums, nil
 }
 
 func (this *FlickrAPI) GetLogin() (*FlickrUser, error) {
