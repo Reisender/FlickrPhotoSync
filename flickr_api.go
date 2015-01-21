@@ -339,29 +339,17 @@ func (this *FlickrAPI) Download(info *PhotoInfo, p *Photo) error {
 func (this *FlickrAPI) get(resp FlickrResponse) error {
 	return this.do("GET", resp)
 }
-func (this *FlickrAPI) getRaw() ([]byte, error) {
-	return this.doRaw("GET")
-}
 
 func (this *FlickrAPI) post(resp FlickrResponse) error {
 	return this.do("POST", resp)
-}
-func (this *FlickrAPI) postRaw() ([]byte, error) {
-	return this.doRaw("POST")
 }
 
 func (this *FlickrAPI) put(resp FlickrResponse) error {
 	return this.do("PUT", resp)
 }
-func (this *FlickrAPI) putRaw() ([]byte, error) {
-	return this.doRaw("PUT")
-}
 
 func (this *FlickrAPI) del(resp FlickrResponse) error {
 	return this.do("DELETE", resp)
-}
-func (this *FlickrAPI) delRaw() ([]byte, error) {
-	return this.doRaw("DELETE")
 }
 
 func (this *FlickrAPI) do(method string, resp FlickrResponse) error {
