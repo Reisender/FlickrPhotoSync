@@ -43,8 +43,15 @@ type PhotoSize struct {
 	Source string
 }
 
+type FlickrResponse interface {
+	Success() bool
+}
+
 type FlickrBaseApiResponse struct {
 	Stat string
+}
+func (this FlickrBaseApiResponse) Success() bool {
+	return this.Stat == "ok"
 }
 
 type FlickrAlbumsResponse struct {
@@ -329,55 +336,42 @@ func (this *FlickrAPI) Download(info *PhotoInfo, p *Photo) error {
 
 // ***** Private Functions *****
 
-func (this *FlickrAPI) get(resp interface{}) error {
+func (this *FlickrAPI) get(resp FlickrResponse) error {
 	return this.do("GET", resp)
 }
 func (this *FlickrAPI) getRaw() ([]byte, error) {
 	return this.doRaw("GET")
 }
 
-func (this *FlickrAPI) post(resp interface{}) error {
+func (this *FlickrAPI) post(resp FlickrResponse) error {
 	return this.do("POST", resp)
 }
 func (this *FlickrAPI) postRaw() ([]byte, error) {
 	return this.doRaw("POST")
 }
 
-func (this *FlickrAPI) put(resp interface{}) error {
+func (this *FlickrAPI) put(resp FlickrResponse) error {
 	return this.do("PUT", resp)
 }
 func (this *FlickrAPI) putRaw() ([]byte, error) {
 	return this.doRaw("PUT")
 }
 
-func (this *FlickrAPI) del(resp interface{}) error {
+func (this *FlickrAPI) del(resp FlickrResponse) error {
 	return this.do("DELETE", resp)
 }
 func (this *FlickrAPI) delRaw() ([]byte, error) {
 	return this.doRaw("DELETE")
 }
 
-func (this *FlickrAPI) do(method string, resp interface{}) error {
+func (this *FlickrAPI) do(method string, resp FlickrResponse) error {
 	contents, err := this.doRaw(method)
 	if err != nil { return err }
 
 	err = json.Unmarshal(contents, resp)
 	if err != nil { return err }
 
-	var stat string
-
-	switch f := resp.(type) {
-	case *FlickrApiResponse: // f is of type *foo
-		stat = f.Stat
-	case *FlickrBaseApiResponse: // f is of type *foo
-		stat = f.Stat
-	default: // f is some other type
-		// allow it to go through
-		stat = "ok"
-		// hope they know what they are doing
-	}
-
-	if stat != "ok" {
+	if !resp.Success() {
 		return &Error{ string(contents) }
 	}
 
