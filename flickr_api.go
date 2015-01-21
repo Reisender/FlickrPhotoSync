@@ -142,9 +142,9 @@ func (this *FlickrAPI) Search(form *url.Values) (*PhotosMap, error) {
 
 	photos := make(PhotosMap)
 
-	err := this.getAllPages(func(data *FlickrApiResponse) {
+	err := this.getAllPages(func(page *FlickrApiResponse) {
 		// extract into photos map
-		for _, img := range data.Data.Photos {
+		for _, img := range page.Data.Photos {
 			photos[img.Title] = img
 		}
 	})
@@ -332,6 +332,9 @@ func (this *FlickrAPI) Download(info *PhotoInfo, p *Photo) error {
 func (this *FlickrAPI) get(resp interface{}) error {
 	return this.do("GET", resp)
 }
+func (this *FlickrAPI) getRaw() ([]byte, error) {
+	return this.doRaw("GET")
+}
 
 func (this *FlickrAPI) post(resp interface{}) error {
 	return this.do("POST", resp)
@@ -346,33 +349,11 @@ func (this *FlickrAPI) del(resp interface{}) error {
 }
 
 func (this *FlickrAPI) do(method string, resp interface{}) error {
-	methodFunc := this.oauthClient.Get
-	switch method { // override the default method of get
-		case "POST":
-			methodFunc = this.oauthClient.Post
-		case "PUT":
-			methodFunc = this.oauthClient.Put
-		case "DELETE":
-			methodFunc = this.oauthClient.Delete
-	}
-	r, err := methodFunc(http.DefaultClient, &this.config.Access, this.apiBase+"/rest", this.form)
+	contents, err := this.doRaw(method)
 	if err != nil { return err }
 
-	defer r.Body.Close()
-
-	if r.StatusCode != 200 {
-		return &Error{r.Status}
-	}
-
-	contents, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return err
-	}
-
 	err = json.Unmarshal(contents, resp)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 
 	var stat string
 
@@ -392,6 +373,27 @@ func (this *FlickrAPI) do(method string, resp interface{}) error {
 	}
 
 	return nil
+}
+func (this *FlickrAPI) doRaw(method string) ([]byte, error) {
+	methodFunc := this.oauthClient.Get
+	switch method { // override the default method of get
+		case "POST":
+			methodFunc = this.oauthClient.Post
+		case "PUT":
+			methodFunc = this.oauthClient.Put
+		case "DELETE":
+			methodFunc = this.oauthClient.Delete
+	}
+	r, err := methodFunc(http.DefaultClient, &this.config.Access, this.apiBase+"/rest", this.form)
+	if err != nil { return nil,err }
+
+	defer r.Body.Close()
+
+	if r.StatusCode != 200 {
+		return nil,&Error{r.Status}
+	}
+
+	return ioutil.ReadAll(r.Body)
 }
 
 func (this *FlickrAPI) getAllPages(fn func(*FlickrApiResponse)) error {
