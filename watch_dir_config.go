@@ -9,6 +9,7 @@ type WatchDirConfig struct {
 	Dir string
 	Tags string
 	tagsTmpl *template.Template
+	Albums []string
 }
 
 func (this *WatchDirConfig) CreateTemplates() {
@@ -23,4 +24,8 @@ func (this *WatchDirConfig) GetTags(context DymanicValueContext) (string, error)
 	}
 
 	return tags.String(), nil
+}
+
+func (this *WatchDirConfig) GetAlbums(context DymanicValueContext) []string {
+	return this.Albums
 }

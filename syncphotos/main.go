@@ -49,7 +49,7 @@ func main() {
 	if opt.Dryrun { fmt.Println("--+ Dry Run +--") }
 
 	// now walk the directory
-	rencnt, excnt, newcnt, errCnt, err := photosync.Sync(fl,photos,videos,opt)
+	rencnt, excnt, newcnt, errCnt, err := photosync.Sync(fl,photos,videos,albums,opt)
 	if err != nil {
 		log.Fatal(errCnt,err)
 	}
@@ -76,6 +76,7 @@ func getOptions() *photosync.Options {
 	daemon := flag.Bool("daemon", false, "run as a daemon that watches the dirs in the config for newly created files")
 
 	retroTags := flag.Bool("retro-tags", false, "retroactively set the tags for images found in a folder with tags in the config")
+	retroAlbums := flag.Bool("retro-albums", false, "retroactively set the albums for images found in a folder with albums in the config")
 
 	flag.Parse()
 
@@ -83,6 +84,6 @@ func getOptions() *photosync.Options {
 	*dryrun = *dryrun || *dry_run
 	*noupload = *noupload || *no_upload
 
-	return &photosync.Options{ *configPath, *dryrun, *noupload, *daemon, *retroTags }
+	return &photosync.Options{ *configPath, *dryrun, *noupload, *daemon, *retroTags, *retroAlbums }
 }
 

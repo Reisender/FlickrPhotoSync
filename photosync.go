@@ -25,6 +25,7 @@ type Options struct {
 	NoUpload bool
 	Daemon bool
 	RetroTags bool
+	RetroAlbums bool
 }
 
 type PhotosMap map[string]Photo
@@ -86,7 +87,7 @@ func LoadConfig(configPath *string,config *PhotosyncConfig) error {
 	return nil
 }
 
-func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (int, int, int, int, error) {
+func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, albums *AlbumsMap, opt *Options) (int, int, int, int, error) {
 	renCnt := 0
 	exCnt := 0
 	upCnt := 0
@@ -110,7 +111,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (i
 		}
 
 		err := filepath.Walk(dir.Dir, func (path string, f os.FileInfo, err error) error {
-			return processFile(api, &dir, path, f, &exifs, photos, videos, &renCnt, &exCnt, &upCnt, &errCnt, opt)
+			return processFile(api, &dir, path, f, &exifs, photos, videos, albums, &renCnt, &exCnt, &upCnt, &errCnt, opt)
 		})
 
 		if err != nil {
@@ -152,7 +153,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (i
 						}
 
 
-						processFile(api, cfg, event.Name, f, nil, photos, videos, &renCnt, &exCnt, &upCnt, &errCnt, opt)
+						processFile(api, cfg, event.Name, f, nil, photos, videos, albums, &renCnt, &exCnt, &upCnt, &errCnt, opt)
 					}
 				case err := <-watcher.Errors:
 					log.Println("error:", err)
@@ -183,7 +184,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, opt *Options) (i
 	return renCnt, exCnt, upCnt, errCnt, nil
 }
 
-func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileInfo, exifs *map[string]ExifToolOutput, photos, videos *PhotosMap, renCnt, exCnt, upCnt, errCnt *int, opt *Options) error {
+func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileInfo, exifs *map[string]ExifToolOutput, photos, videos *PhotosMap, albums *AlbumsMap, renCnt, exCnt, upCnt, errCnt *int, opt *Options) error {
 	if !f.IsDir() { // make sure we aren't operating on a directory
 
 		var newPath, newKey string
@@ -196,6 +197,16 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 		var exif ExifToolOutput
 		if exifs != nil {
 			exif = (*exifs)[path]
+		}
+
+		// create the dynamic context for the templates in the config
+		context := DymanicValueContext{
+			path: path,
+			dir: dir,
+			ext: ext,
+			title: key,
+			dirCfg: *dirCfg,
+			exif: exif,
 		}
 
 		// rename file if needed
@@ -212,6 +223,17 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 					var err error
 					f, err = os.Stat(path)
 					if err != nil { return err }
+
+					// update the context as well
+					context = DymanicValueContext{
+						path: path,
+						dir: dir,
+						ext: ext,
+						title: key,
+						dirCfg: *dirCfg,
+						exif: exif,
+					}
+
 					*renCnt++
 				}
 
@@ -246,17 +268,17 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 
 					// set the tags in config
 					if len(dirCfg.Tags) > 0 {
-						context := DymanicValueContext{
-							path: path,
-							dir: dir,
-							ext: ext,
-							title: key,
-							dirCfg: *dirCfg,
-							exif: exif,
-						}
 						tags, err := dirCfg.GetTags(context)
 						if err == nil {
 							api.AddTags(res.PhotoId, tags)
+						}
+					}
+
+					if len(dirCfg.Albums) > 0 {
+						for _, albName := range dirCfg.GetAlbums(context) {
+							if val, ok := (*albums)[albName]; ok {
+								api.AddToAlbum(res.PhotoId, val.Id)
+							}
 						}
 					}
 
@@ -289,11 +311,22 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 				if opt.RetroTags && len(dirCfg.Tags) > 0 {
 					fmt.Print("assign tags: ",dirCfg.Tags)
 					if !opt.Dryrun && !opt.NoUpload {
-						api.AddTags(exPhoto.Id, dirCfg.Tags)
+						tags, err := dirCfg.GetTags(context)
+						if err == nil {
+							api.AddTags(exPhoto.Id, tags)
+						}
 					} else {
 						fmt.Print(" --+ dry run +--")
 					}
 					fmt.Println()
+				}
+
+				if opt.RetroAlbums && len(dirCfg.Albums) > 0 {
+					for _, albName := range dirCfg.GetAlbums(context) {
+						if val, ok := (*albums)[albName]; ok {
+							api.AddToAlbum(exPhoto.Id, val.Id)
+						}
+					}
 				}
 
 				*exCnt++

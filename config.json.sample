@@ -20,7 +20,8 @@
       "tags": "instagram"
     }, {
       "dir": "/another/dir/to/watch",
-      "tags": "instagram {{.folders}}"
+      "tags": "instagram {{.folders}}",
+      "albums": ["Some Album Name"]
     },
     {
       "dir": "/min/settings/for/dir/to/watch"

@@ -269,6 +269,21 @@ func (this *FlickrAPI) AddTags(photoId, tags string) error {
 	return err
 }
 
+func (this *FlickrAPI) AddToAlbum(photoId, photoSetId string) error {
+	this.form.Set("method", "flickr.photosets.addPhoto")
+
+	this.form.Set("photo_id", photoId)
+	defer this.form.Del("photo_id") // remove from form values when done
+
+	this.form.Set("photoset_id", photoSetId)
+	defer this.form.Del("photoset_id")
+
+	data := FlickrBaseApiResponse{}
+	err := this.post(&data)
+
+	return err
+}
+
 func (this *FlickrAPI) SetTitle(photo_id, title string) error {
 	this.form.Set("method", "flickr.photos.setMeta")
 
