@@ -279,9 +279,26 @@ func (this *FlickrAPI) AddToAlbum(photoId, photoSetId string) error {
 	defer this.form.Del("photoset_id")
 
 	data := FlickrBaseApiResponse{}
-	err := this.post(&data)
+	if err := this.post(&data); err != nil { return err }
 
-	return err
+	// now set it to the album photo
+	this.form.Set("method", "flickr.photosets.setPrimaryPhoto")
+
+	ignore := FlickrBaseApiResponse{}
+	if err := this.post(&ignore); err != nil { return err }
+
+
+	// now set the order
+	this.form.Set("method", "flickr.photosets.reorderPhotos")
+
+	this.form.Del("photo_id") // remove from form values when done
+
+	this.form.Set("photo_ids", photoId)
+	defer this.form.Del("photo_ids") // remove from form values when done
+
+	if err := this.post(&ignore); err != nil { return err }
+
+	return nil
 }
 
 func (this *FlickrAPI) SetTitle(photo_id, title string) error {

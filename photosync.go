@@ -196,7 +196,17 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 
 		var exif ExifToolOutput
 		if exifs != nil {
-			exif = (*exifs)[path]
+			var ok bool
+			exif, ok = (*exifs)[path]
+			if !ok {
+				tmpexif, err := GetExifData(path)
+				if err != nil { return err }
+				exif = *tmpexif
+			}
+		} else {
+			tmpexif, err := GetExifData(path)
+			if err != nil { return err }
+			exif = *tmpexif
 		}
 
 		// create the dynamic context for the templates in the config
@@ -242,7 +252,9 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 		}
 
 		if extUpper == ".JPG" || extUpper == ".MOV" || extUpper == ".MP4" {
-			fmt.Println(path)
+			if !opt.Daemon {
+				fmt.Println(path)
+			}
 
 			var exists bool
 			var exPhoto Photo
@@ -254,6 +266,9 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 			}
 
 			if !exists {
+				if opt.Daemon {
+					fmt.Println(path)
+				}
 				fmt.Print("|=====")
 
 				if !opt.Dryrun && !opt.NoUpload {
