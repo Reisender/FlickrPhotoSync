@@ -15,6 +15,7 @@ import (
 	"github.com/garyburd/go-oauth/oauth"
 	"mime/multipart"
 	"bytes"
+	"strings"
 )
 
 type Album struct {
@@ -285,20 +286,20 @@ func (this *FlickrAPI) AddToAlbum(photoId, photoSetId string) error {
 	this.form.Set("method", "flickr.photosets.setPrimaryPhoto")
 
 	ignore := FlickrBaseApiResponse{}
-	if err := this.post(&ignore); err != nil { return err }
+	return this.post(&ignore)
+}
 
-
-	// now set the order
+func (this *FlickrAPI) SetAlbumOrder(photoSetId string, photoIds []string) error {
 	this.form.Set("method", "flickr.photosets.reorderPhotos")
 
-	this.form.Del("photo_id") // remove from form values when done
+	this.form.Set("photoset_id", photoSetId)
+	defer this.form.Del("photoset_id")
 
-	this.form.Set("photo_ids", photoId)
+	this.form.Set("photo_ids", strings.Join(photoIds, ","))
 	defer this.form.Del("photo_ids") // remove from form values when done
 
-	if err := this.post(&ignore); err != nil { return err }
-
-	return nil
+	ignore := FlickrBaseApiResponse{}
+	return this.post(&ignore)
 }
 
 func (this *FlickrAPI) SetTitle(photo_id, title string) error {

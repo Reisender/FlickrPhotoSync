@@ -290,11 +290,7 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 					}
 
 					if len(dirCfg.Albums) > 0 {
-						for _, albName := range dirCfg.GetAlbums(context) {
-							if val, ok := (*albums)[albName]; ok {
-								api.AddToAlbum(res.PhotoId, val.Id)
-							}
-						}
+						applyAlbums( api, dirCfg, context, albums, res.PhotoId )
 					}
 
 					// add back in to photos and videos
@@ -336,12 +332,9 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 					fmt.Println()
 				}
 
+				// still apply albums
 				if opt.RetroAlbums && len(dirCfg.Albums) > 0 {
-					for _, albName := range dirCfg.GetAlbums(context) {
-						if val, ok := (*albums)[albName]; ok {
-							api.AddToAlbum(exPhoto.Id, val.Id)
-						}
-					}
+					applyAlbums( api, dirCfg, context, albums, exPhoto.Id )
 				}
 
 				*exCnt++
@@ -350,6 +343,14 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 	}
 
 	return nil
+}
+
+func applyAlbums(api *FlickrAPI, dirCfg *WatchDirConfig, context DymanicValueContext, albums *AlbumsMap, photoId string) {
+	for _, albName := range dirCfg.GetAlbums(context) {
+		if val, ok := (*albums)[albName]; ok {
+			api.AddToAlbum(photoId, val.Id)
+		}
+	}
 }
 
 func getTimeFromTitle(api *FlickrAPI, title string) (*time.Time, error) {
