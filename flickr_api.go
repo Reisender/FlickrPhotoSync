@@ -59,6 +59,7 @@ type FlickrPagedResponse interface {
 	Page() int
 	Pages() int
 	PerPage() int
+	Total() int
 	Reset()
 	Success() bool
 }
@@ -80,6 +81,7 @@ type FlickrAlbumsResponse struct {
 func (this FlickrAlbumsResponse) Page() int { return this.Data.Page }
 func (this FlickrAlbumsResponse) Pages() int { return this.Data.Pages }
 func (this FlickrAlbumsResponse) PerPage() int { return this.Data.Perpage }
+func (this FlickrAlbumsResponse) Total() int { return this.Data.Total }
 func (this *FlickrAlbumsResponse) Reset() {
 	this.Stat = ""
 	this.Data.Page = 0
@@ -100,6 +102,11 @@ type FlickrAlbumPhotosResponse struct {
 func (this FlickrAlbumPhotosResponse) Page() int { return this.Data.Page }
 func (this FlickrAlbumPhotosResponse) Pages() int { return this.Data.Pages }
 func (this FlickrAlbumPhotosResponse) PerPage() int { return this.Data.Perpage }
+func (this FlickrAlbumPhotosResponse) Total() int {
+	i, err := strconv.Atoi(this.Data.Total)
+	if err != nil { return 0 }
+	return i
+}
 func (this *FlickrAlbumPhotosResponse) Reset() {
 	this.Stat = ""
 	this.Data.Page = 0
@@ -125,6 +132,11 @@ type FlickrApiResponse struct {
 func (this FlickrApiResponse) Page() int { return this.Data.Page }
 func (this FlickrApiResponse) Pages() int { return this.Data.Pages }
 func (this FlickrApiResponse) PerPage() int { return this.Data.Perpage }
+func (this FlickrApiResponse) Total() int {
+	i, err := strconv.Atoi(this.Data.Total)
+	if err != nil { return 0 }
+	return i
+}
 func (this *FlickrApiResponse) Reset() {
 	this.Stat = ""
 	this.Data.Page = 0
@@ -239,11 +251,12 @@ func (this *FlickrAPI) GetAlbums(user *FlickrUser) (*AlbumsMap, error) {
 	page := FlickrAlbumsResponse{}
 	fmt.Print("\rloading albums: 0%")
 	err := this.getAllPages(&page, func() {
-		for _, alb := range page.Data.Albums {
+		for i, alb := range page.Data.Albums {
 			_ = this.LoadAlbumPhotos(&alb)
 			albums[alb.GetTitle()] = alb
+			cnt := (page.Page()-1) * page.PerPage() + (i+1)
+			fmt.Print("\rloading albums: ",int((float32(cnt)/float32(page.Total()))*100),"%")
 		}
-		fmt.Print("\rloading albums: ",int((float32(page.Page())/float32(page.Pages()))*100),"%")
 	})
 	fmt.Println()
 
