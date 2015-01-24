@@ -18,16 +18,6 @@ import (
 	"strings"
 )
 
-type Album struct {
-	Id string
-	Title struct {
-		Content string `json:"_content"`
-	} `json:"title"`
-}
-func (this Album) GetTitle() string {
-	return this.Title.Content
-}
-
 type Photo struct {
 	Id string
 	Owner string
@@ -65,6 +55,14 @@ func (this FlickrBaseApiResponse) Success() bool {
 	return this.Stat == "ok"
 }
 
+type FlickrPagedResponse interface {
+	Page() int
+	Pages() int
+	PerPage() int
+	Reset()
+	Success() bool
+}
+
 type flickrResponsePageInfo struct {
 	Page int
 	Pages int
@@ -79,6 +77,37 @@ type FlickrAlbumsResponse struct {
 		Albums []Album `json:"photoset"`
 	} `json:"photosets"`
 }
+func (this FlickrAlbumsResponse) Page() int { return this.Data.Page }
+func (this FlickrAlbumsResponse) Pages() int { return this.Data.Pages }
+func (this FlickrAlbumsResponse) PerPage() int { return this.Data.Perpage }
+func (this *FlickrAlbumsResponse) Reset() {
+	this.Stat = ""
+	this.Data.Page = 0
+	this.Data.Pages = 0
+	this.Data.Perpage = 0
+	this.Data.Total = 0
+	this.Data.Albums = []Album{}
+}
+
+type FlickrAlbumPhotosResponse struct {
+	FlickrBaseApiResponse
+	Data struct {
+		flickrResponsePageInfo
+		Total string
+		Photos []Photo `json:"photo"`
+	} `json:"photoset"`
+}
+func (this FlickrAlbumPhotosResponse) Page() int { return this.Data.Page }
+func (this FlickrAlbumPhotosResponse) Pages() int { return this.Data.Pages }
+func (this FlickrAlbumPhotosResponse) PerPage() int { return this.Data.Perpage }
+func (this *FlickrAlbumPhotosResponse) Reset() {
+	this.Stat = ""
+	this.Data.Page = 0
+	this.Data.Pages = 0
+	this.Data.Perpage = 0
+	this.Data.Total = ""
+	this.Data.Photos = []Photo{}
+}
 
 type FlickrApiResponse struct {
 	FlickrBaseApiResponse
@@ -92,6 +121,19 @@ type FlickrApiResponse struct {
 	SizeData struct {
 		Sizes []PhotoSize `json:"size"`
 	} `json:"sizes"`
+}
+func (this FlickrApiResponse) Page() int { return this.Data.Page }
+func (this FlickrApiResponse) Pages() int { return this.Data.Pages }
+func (this FlickrApiResponse) PerPage() int { return this.Data.Perpage }
+func (this *FlickrApiResponse) Reset() {
+	this.Stat = ""
+	this.Data.Page = 0
+	this.Data.Pages = 0
+	this.Data.Perpage = 0
+	this.Data.Total = ""
+	this.Data.Photos = []Photo{}
+	this.PhotoDetails = PhotoInfo{}
+	this.SizeData.Sizes = []PhotoSize{}
 }
 
 type FlickrUploadResponse struct {
@@ -169,7 +211,8 @@ func (this *FlickrAPI) Search(form *url.Values) (*PhotosMap, error) {
 
 	photos := make(PhotosMap)
 
-	err := this.getAllPages(func(page *FlickrApiResponse) {
+	page := FlickrApiResponse{}
+	err := this.getAllPages(&page, func() {
 		// extract into photos map
 		for _, img := range page.Data.Photos {
 			photos[img.Title] = img
@@ -255,6 +298,18 @@ func (this *FlickrAPI) GetSizes(p *Photo) (*[]PhotoSize, error) {
 	return &data.SizeData.Sizes, nil
 }
 
+func (this *FlickrAPI) LoadAlbumPhotos(album *Album) error {
+	this.form.Set("method", "flickr.photosets.getPhotos")
+
+	this.form.Set("photoset_id", album.Id)
+	defer this.form.Del("photoset_id") // remove from form values when done
+
+	data := FlickrAlbumPhotosResponse{}
+	if err := this.get(&data); err != nil { return err }
+
+	return nil
+}
+
 func (this *FlickrAPI) AddTags(photoId, tags string) error {
 	this.form.Set("method", "flickr.photos.addTags")
 
@@ -299,7 +354,36 @@ func (this *FlickrAPI) SetAlbumOrder(photoSetId string, photoIds []string) error
 	defer this.form.Del("photo_ids") // remove from form values when done
 
 	ignore := FlickrBaseApiResponse{}
-	return this.post(&ignore)
+	if err := this.post(&ignore); err != nil {
+		return err
+	}
+
+	if !ignore.Success() {
+		return &Error{"Failed to set album order"}
+	}
+
+	return nil
+}
+
+func (this *FlickrAPI) SetAlbumPhoto(photoId, photoSetId string) error {
+	this.form.Set("method", "flickr.photosets.setPrimaryPhoto")
+
+	this.form.Set("photo_id", photoId)
+	defer this.form.Del("photo_id") // remove from form values when done
+
+	this.form.Set("photoset_id", photoSetId)
+	defer this.form.Del("photoset_id")
+
+	ignore := FlickrBaseApiResponse{}
+	if err := this.post(&ignore); err != nil {
+		return err
+	}
+
+	if !ignore.Success() {
+		return &Error{"Failed to set album photo"}
+	}
+
+	return nil
 }
 
 func (this *FlickrAPI) SetTitle(photo_id, title string) error {
@@ -462,42 +546,41 @@ func (this *FlickrAPI) doRaw(method string) ([]byte, error) {
 	return ioutil.ReadAll(r.Body)
 }
 
-func (this *FlickrAPI) getAllPages(fn func(*FlickrApiResponse)) error {
+func (this *FlickrAPI) getAllPages(data FlickrPagedResponse, fn func()) error {
 	var wg sync.WaitGroup
 
-	data := FlickrApiResponse{}
-	err := this.get(&data)
+	err := this.get(data)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Print("\rloading: ",int((float32(1)/float32(data.Data.Pages))*100),"%")
-	wg.Add(data.Data.Pages)
+	fmt.Print("\rloading: ",int((float32(1)/float32(data.Pages()))*100),"%")
+	wg.Add(data.Pages())
 	//go func() {
 	func() {
 		defer wg.Done()
-		fn(&data)
+		fn()
 	}()
 
 	// get the rest of the pages
-	for page := 2; page <= data.Data.Pages; page++ {
+	for page := 2; page <= data.Pages(); page++ {
 		// comment out the parallel requesting as the flickr api seems occasionally return a dup page response
-		//go func(page int) { 
-		func(page int) {
+		//go func(page int, data FlickrPagedResponse) { 
+		func(page int, data FlickrPagedResponse) {
 			defer wg.Done()
 
 			this.form.Set("page", strconv.Itoa(page))
 			defer this.form.Del("page")
 
-			data := FlickrApiResponse{}
-			err := this.get(&data)
+			data.Reset()
+			err := this.get(data)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			fmt.Print("\rloading: ",int((float32(page)/float32(data.Data.Pages))*100),"%")
+			fmt.Print("\rloading: ",int((float32(page)/float32(data.Pages()))*100),"%")
 
-			fn(&data)
-		}(page)
+			fn()
+		}(page, data)
 	}
 
 	wg.Wait()

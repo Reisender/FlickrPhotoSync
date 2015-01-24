@@ -29,7 +29,6 @@ type Options struct {
 }
 
 type PhotosMap map[string]Photo
-type AlbumsMap map[string]Album
 
 type OauthConfig struct {
 	Consumer oauth.Credentials
