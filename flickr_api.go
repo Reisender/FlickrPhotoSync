@@ -217,7 +217,9 @@ func (this *FlickrAPI) Search(form *url.Values) (*PhotosMap, error) {
 		for _, img := range page.Data.Photos {
 			photos[img.Title] = img
 		}
+		fmt.Print("\rloading: ",int((float32(page.Page())/float32(page.Pages()))*100),"%")
 	})
+	fmt.Println()
 
 	return &photos, err
 }
@@ -234,15 +236,18 @@ func (this *FlickrAPI) GetAlbums(user *FlickrUser) (*AlbumsMap, error) {
 
 	albums := make(AlbumsMap)
 
-	data := FlickrAlbumsResponse{}
-	err := this.get(&data)
-	if err != nil { return nil, err }
+	page := FlickrAlbumsResponse{}
+	fmt.Print("\rloading albums: 0%")
+	err := this.getAllPages(&page, func() {
+		for _, alb := range page.Data.Albums {
+			_ = this.LoadAlbumPhotos(&alb)
+			albums[alb.GetTitle()] = alb
+		}
+		fmt.Print("\rloading albums: ",int((float32(page.Page())/float32(page.Pages()))*100),"%")
+	})
+	fmt.Println()
 
-	for _, alb := range data.Data.Albums {
-		albums[alb.GetTitle()] = alb
-	}
-
-	return &albums, nil
+	return &albums, err
 }
 
 func (this *FlickrAPI) GetLogin() (*FlickrUser, error) {
@@ -304,10 +309,14 @@ func (this *FlickrAPI) LoadAlbumPhotos(album *Album) error {
 	this.form.Set("photoset_id", album.Id)
 	defer this.form.Del("photoset_id") // remove from form values when done
 
-	data := FlickrAlbumPhotosResponse{}
-	if err := this.get(&data); err != nil { return err }
+	page := FlickrAlbumPhotosResponse{}
 
-	return nil
+	return this.getAllPages(&page, func() {
+		// extract into photos map
+		for _, img := range page.Data.Photos {
+			album.Append(img.Id)
+		}
+	})
 }
 
 func (this *FlickrAPI) AddTags(photoId, tags string) error {
@@ -553,7 +562,6 @@ func (this *FlickrAPI) getAllPages(data FlickrPagedResponse, fn func()) error {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Print("\rloading: ",int((float32(1)/float32(data.Pages()))*100),"%")
 	wg.Add(data.Pages())
 	//go func() {
 	func() {
@@ -577,14 +585,11 @@ func (this *FlickrAPI) getAllPages(data FlickrPagedResponse, fn func()) error {
 				log.Fatal(err)
 			}
 
-			fmt.Print("\rloading: ",int((float32(page)/float32(data.Pages()))*100),"%")
-
 			fn()
 		}(page, data)
 	}
 
 	wg.Wait()
-	fmt.Println("")
 
 	return nil
 }
