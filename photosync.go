@@ -92,6 +92,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, albums *AlbumsMa
 	upCnt := 0
 	errCnt := 0
 
+	// process all the directories in the config
 	for _, dir := range api.config.WatchDir {
 		// ensure the path exists
 		if _, err := os.Stat(dir.Dir); os.IsNotExist(err) {
@@ -117,6 +118,9 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, albums *AlbumsMa
 			return renCnt, exCnt, upCnt, errCnt, err
 		}
 	}
+
+	// now same album ordering that changed
+	updateAlbumsOrder(api, albums)
 
 	// start the daemon
 	if opt.Daemon {
@@ -153,6 +157,9 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, albums *AlbumsMa
 
 
 						processFile(api, cfg, event.Name, f, nil, photos, videos, albums, &renCnt, &exCnt, &upCnt, &errCnt, opt)
+
+						// update album order if changed
+						updateAlbumsOrder(api, albums)
 					}
 				case err := <-watcher.Errors:
 					log.Println("error:", err)
@@ -347,7 +354,18 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 func applyAlbums(api *FlickrAPI, dirCfg *WatchDirConfig, context DymanicValueContext, albums *AlbumsMap, photoId string) {
 	for _, albName := range dirCfg.GetAlbums(context) {
 		if val, ok := (*albums)[albName]; ok {
-			api.AddToAlbum(photoId, val.Id)
+			api.AddToAlbum(photoId, val)
+		}
+	}
+}
+
+func updateAlbumsOrder(api *FlickrAPI, albums *AlbumsMap) {
+	// loop over keys and index directly into albums to keep ref back to original
+	for _, alb := range *albums {
+		if alb.Dirty {
+			fmt.Println("update album order:", alb.GetTitle())
+			api.SetAlbumOrder(alb.Id, alb.PhotoIds)
+			alb.Dirty = false
 		}
 	}
 }

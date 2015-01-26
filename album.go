@@ -3,7 +3,7 @@ package photosync
 import (
 )
 
-type AlbumsMap map[string]Album
+type AlbumsMap map[string]*Album
 
 type Album struct {
 	Id string
@@ -11,6 +11,7 @@ type Album struct {
 		Content string `json:"_content"`
 	} `json:"title"`
 	PhotoIds []string
+	Dirty bool
 }
 
 func (this Album) GetTitle() string {
@@ -19,10 +20,12 @@ func (this Album) GetTitle() string {
 
 func (this *Album) Prepend(photoId string) {
 	this.PhotoIds = append([]string{photoId}, this.PhotoIds...)
+	this.Dirty = true
 }
 
 func (this *Album) Append(photoId string) {
 	this.PhotoIds = append(this.PhotoIds,photoId)
+	this.Dirty = true
 }
 
 func (this *Album) Reverse() {

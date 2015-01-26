@@ -252,14 +252,14 @@ func (this *FlickrAPI) GetAlbums(user *FlickrUser) (*AlbumsMap, error) {
 	fmt.Print("\rloading albums: 0%")
 	err := this.getAllPages(&page, func() {
 		for i, alb := range page.Data.Albums {
-			_ = this.LoadAlbumPhotos(&alb)
-			albums[alb.GetTitle()] = alb
+			albCopy := alb
+			_ = this.LoadAlbumPhotos(&albCopy)
+			albums[albCopy.GetTitle()] = &albCopy
 			cnt := (page.Page()-1) * page.PerPage() + (i+1)
 			fmt.Print("\rloading albums: ",int((float32(cnt)/float32(page.Total()))*100),"%")
 		}
 	})
 	fmt.Println()
-
 
 	return &albums, err
 }
@@ -328,7 +328,8 @@ func (this *FlickrAPI) LoadAlbumPhotos(album *Album) error {
 	return this.getAllPages(&page, func() {
 		// extract into photos map
 		for _, img := range page.Data.Photos {
-			album.Append(img.Id)
+			// using album.Append with mark as dirty
+			album.PhotoIds = append(album.PhotoIds, img.Id)
 		}
 	})
 }
@@ -348,17 +349,20 @@ func (this *FlickrAPI) AddTags(photoId, tags string) error {
 	return err
 }
 
-func (this *FlickrAPI) AddToAlbum(photoId, photoSetId string) error {
+func (this *FlickrAPI) AddToAlbum(photoId string, album *Album) error {
 	this.form.Set("method", "flickr.photosets.addPhoto")
 
 	this.form.Set("photo_id", photoId)
 	defer this.form.Del("photo_id") // remove from form values when done
 
-	this.form.Set("photoset_id", photoSetId)
+	this.form.Set("photoset_id", album.Id)
 	defer this.form.Del("photoset_id")
 
 	data := FlickrBaseApiResponse{}
 	if err := this.post(&this.form, &data); err != nil { return err }
+
+	// add to album photoIds array
+	album.Prepend(photoId)
 
 	// now set it to the album photo
 	this.form.Set("method", "flickr.photosets.setPrimaryPhoto")
