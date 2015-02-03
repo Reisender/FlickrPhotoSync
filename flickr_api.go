@@ -64,24 +64,43 @@ type FlickrPagedResponse interface {
 	Success() bool
 }
 
+// Be more flexible when un-marshaling from json. Unmarshal from int or string.
+type FlexInt int
+func (this *FlexInt) UnmarshalJSON(b []byte) (err error) {
+	var p int
+	var ps string
+
+	// parse page
+	if err = json.Unmarshal(b, &p); err == nil {
+		*this = FlexInt(p)
+	} else if err = json.Unmarshal(b, &ps); err == nil {
+		var val int
+		if val, err = strconv.Atoi(ps); err == nil {
+			*this = FlexInt(val)
+		}
+	}
+
+	return
+}
+
 type flickrResponsePageInfo struct {
-	Page int
-	Pages int
-	Perpage int
+	Page FlexInt
+	Pages FlexInt
+	Perpage FlexInt
+	Total FlexInt
 }
 
 type FlickrAlbumsResponse struct {
 	FlickrBaseApiResponse
 	Data struct {
 		flickrResponsePageInfo
-		Total int
 		Albums []Album `json:"photoset"`
 	} `json:"photosets"`
 }
-func (this FlickrAlbumsResponse) Page() int { return this.Data.Page }
-func (this FlickrAlbumsResponse) Pages() int { return this.Data.Pages }
-func (this FlickrAlbumsResponse) PerPage() int { return this.Data.Perpage }
-func (this FlickrAlbumsResponse) Total() int { return this.Data.Total }
+func (this FlickrAlbumsResponse) Page() int { return int(this.Data.Page) }
+func (this FlickrAlbumsResponse) Pages() int { return int(this.Data.Pages) }
+func (this FlickrAlbumsResponse) PerPage() int { return int(this.Data.Perpage) }
+func (this FlickrAlbumsResponse) Total() int { return int(this.Data.Total) }
 func (this *FlickrAlbumsResponse) Reset() {
 	this.Stat = ""
 	this.Data.Page = 0
@@ -95,24 +114,19 @@ type FlickrAlbumPhotosResponse struct {
 	FlickrBaseApiResponse
 	Data struct {
 		flickrResponsePageInfo
-		Total string
 		Photos []Photo `json:"photo"`
 	} `json:"photoset"`
 }
-func (this FlickrAlbumPhotosResponse) Page() int { return this.Data.Page }
-func (this FlickrAlbumPhotosResponse) Pages() int { return this.Data.Pages }
-func (this FlickrAlbumPhotosResponse) PerPage() int { return this.Data.Perpage }
-func (this FlickrAlbumPhotosResponse) Total() int {
-	i, err := strconv.Atoi(this.Data.Total)
-	if err != nil { return 0 }
-	return i
-}
+func (this FlickrAlbumPhotosResponse) Page() int { return int(this.Data.Page) }
+func (this FlickrAlbumPhotosResponse) Pages() int { return int(this.Data.Pages) }
+func (this FlickrAlbumPhotosResponse) PerPage() int { return int(this.Data.Perpage) }
+func (this FlickrAlbumPhotosResponse) Total() int { return int(this.Data.Total) }
 func (this *FlickrAlbumPhotosResponse) Reset() {
 	this.Stat = ""
 	this.Data.Page = 0
 	this.Data.Pages = 0
 	this.Data.Perpage = 0
-	this.Data.Total = ""
+	this.Data.Total = 0
 	this.Data.Photos = []Photo{}
 }
 
@@ -120,7 +134,6 @@ type FlickrApiResponse struct {
 	FlickrBaseApiResponse
 	Data struct {
 		flickrResponsePageInfo
-		Total string
 		Photos []Photo `json:"photo"`
 	} `json:"photos"`
 	User FlickrUser `json:"user"`
@@ -129,20 +142,16 @@ type FlickrApiResponse struct {
 		Sizes []PhotoSize `json:"size"`
 	} `json:"sizes"`
 }
-func (this FlickrApiResponse) Page() int { return this.Data.Page }
-func (this FlickrApiResponse) Pages() int { return this.Data.Pages }
-func (this FlickrApiResponse) PerPage() int { return this.Data.Perpage }
-func (this FlickrApiResponse) Total() int {
-	i, err := strconv.Atoi(this.Data.Total)
-	if err != nil { return 0 }
-	return i
-}
+func (this FlickrApiResponse) Page() int { return int(this.Data.Page) }
+func (this FlickrApiResponse) Pages() int { return int(this.Data.Pages) }
+func (this FlickrApiResponse) PerPage() int { return int(this.Data.Perpage) }
+func (this FlickrApiResponse) Total() int { return int(this.Data.Total) }
 func (this *FlickrApiResponse) Reset() {
 	this.Stat = ""
 	this.Data.Page = 0
 	this.Data.Pages = 0
 	this.Data.Perpage = 0
-	this.Data.Total = ""
+	this.Data.Total = 0
 	this.Data.Photos = []Photo{}
 	this.PhotoDetails = PhotoInfo{}
 	this.SizeData.Sizes = []PhotoSize{}
@@ -543,7 +552,10 @@ func (this *FlickrAPI) do(method string, form *url.Values, resp FlickrResponse) 
 	if err != nil { return err }
 
 	err = json.Unmarshal(contents, resp)
-	if err != nil { return err }
+	if err != nil {
+		fmt.Println(string(contents))
+		return err
+	}
 
 	if !resp.Success() {
 		return &Error{ string(contents) }
