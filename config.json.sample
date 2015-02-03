@@ -9,11 +9,11 @@
   },
   "filenames": [
     {
-      "match": "IMG_[0-9]{4}\\.JPG"
+      "match": "IMG_[0-9]{4}\\.JPG",
       "append": "_{{.ExifDate}}",
       "prepend": "BEST_"
     }
-  ]
+  ],
   "directories": [
     {
       "dir": "/dir/to/watch",
@@ -22,8 +22,7 @@
       "dir": "/another/dir/to/watch",
       "tags": "instagram {{.folders}}",
       "albums": ["Some Album Name"]
-    },
-    {
+    }, {
       "dir": "/min/settings/for/dir/to/watch"
     }
   ],
