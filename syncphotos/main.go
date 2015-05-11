@@ -9,7 +9,7 @@ import (
 	"github.com/Reisender/photosync"
 )
 
-const syncphotos_version_string = "1.0"
+const syncphotos_version_string = "0.1.0"
 
 func main() {
 	opt := getOptions()
