@@ -9,6 +9,8 @@ import (
 	"github.com/Reisender/photosync"
 )
 
+const syncphotos_version_string = "0.1.0"
+
 func main() {
 	opt := getOptions()
 
@@ -66,6 +68,7 @@ func getOptions() *photosync.Options {
 	u, _ := user.Current()
 	defaultConfPath := u.HomeDir + "/.syncphotos.conf.json"
 
+	version := flag.Bool("version", false, "display the version of syncphotos")
 	configPath := flag.String("config", defaultConfPath, "Path to configuration file containing the application's credentials.")
 	dry_run := flag.Bool("dry-run", false, "dry run means don't actually upload or rename files")
 	dryrun := flag.Bool("dryrun", false, "dry run means don't actually upload or rename files")
@@ -79,6 +82,11 @@ func getOptions() *photosync.Options {
 	retroAlbums := flag.Bool("retro-albums", false, "retroactively set the albums for images found in a folder with albums in the config")
 
 	flag.Parse()
+
+	if (*version) {
+		fmt.Println("syncphotos version ", syncphotos_version_string)
+		os.Exit(0)
+	}
 
 	// consolidate options
 	*dryrun = *dryrun || *dry_run
