@@ -26,14 +26,14 @@ func (this *FilenameConfig) Load() error {
 	return nil
 }
 
-func (this *FilenameConfig) getModifiedTitle(title string, context DymanicValueContext) (string, error) {
+func (this *FilenameConfig) getModifiedTitle(title string, context *DymanicValueContext) (string, error) {
 	tp := new(bytes.Buffer)
 	ta := new(bytes.Buffer)
 
-	if err := this.prependTmpl.Execute(tp,context); err != nil {
+	if err := this.prependTmpl.Execute(tp,*context); err != nil {
 		return title, err
 	}
-	if err := this.appendTmpl.Execute(ta,context); err != nil {
+	if err := this.appendTmpl.Execute(ta,*context); err != nil {
 		return title, err
 	}
 
@@ -65,7 +65,7 @@ func (this *FilenameConfig) GetNewPath(path string, dirCfg *WatchDirConfig, exif
 			dirCfg: *dirCfg,
 			exif: *exif,
 		}
-		newTitle, _ := this.getModifiedTitle(title,context)
+		newTitle, _ := this.getModifiedTitle(title,&context)
 		return dir+newTitle+ext, newTitle, true
 	} else {
 		return path, title, false

@@ -17,7 +17,7 @@ type DymanicValueContext struct {
 	exif ExifToolOutput
 }
 
-func (this DymanicValueContext) ExifDate() (string, error) {
+func (this *DymanicValueContext) ExifDate() (string, error) {
 	layout := "20060102_150405"
 	t, err := time.Parse(ExifTimeLayout, this.exif.Ifd.ModifyDate)
 	if err != nil { return "", nil }
@@ -25,7 +25,7 @@ func (this DymanicValueContext) ExifDate() (string, error) {
 	return t.Format(layout), nil
 }
 
-func (this DymanicValueContext) Folders() (string, error) {
+func (this *DymanicValueContext) Folders() (string, error) {
 	rel, err := filepath.Rel(this.dirCfg.Dir, this.dir)
 	if err != nil { return "", err }
 

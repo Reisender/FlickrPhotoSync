@@ -289,14 +289,14 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 
 					// set the tags in config
 					if len(dirCfg.Tags) > 0 {
-						tags, err := dirCfg.GetTags(context)
+						tags, err := dirCfg.GetTags(&context)
 						if err == nil {
 							api.AddTags(res.PhotoId, tags)
 						}
 					}
 
 					if len(dirCfg.Albums) > 0 {
-						applyAlbums( api, dirCfg, context, albums, res.PhotoId )
+						applyAlbums( api, dirCfg, &context, albums, res.PhotoId )
 					}
 
 					// add back in to photos and videos
@@ -328,7 +328,7 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 				if opt.RetroTags && len(dirCfg.Tags) > 0 {
 					fmt.Print("assign tags: ",dirCfg.Tags)
 					if !opt.Dryrun && !opt.NoUpload {
-						tags, err := dirCfg.GetTags(context)
+						tags, err := dirCfg.GetTags(&context)
 						if err == nil {
 							api.AddTags(exPhoto.Id, tags)
 						}
@@ -340,7 +340,7 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 
 				// still apply albums
 				if opt.RetroAlbums && len(dirCfg.Albums) > 0 {
-					applyAlbums( api, dirCfg, context, albums, exPhoto.Id )
+					applyAlbums( api, dirCfg, &context, albums, exPhoto.Id )
 				}
 
 				*exCnt++
@@ -351,7 +351,7 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 	return nil
 }
 
-func applyAlbums(api *FlickrAPI, dirCfg *WatchDirConfig, context DymanicValueContext, albums *AlbumsMap, photoId string) {
+func applyAlbums(api *FlickrAPI, dirCfg *WatchDirConfig, context *DymanicValueContext, albums *AlbumsMap, photoId string) {
 	for _, albName := range dirCfg.GetAlbums(context) {
 		if val, ok := (*albums)[albName]; ok {
 			api.AddToAlbum(photoId, val)
