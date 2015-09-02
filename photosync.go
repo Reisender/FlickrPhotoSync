@@ -1,17 +1,17 @@
 package photosync
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/garyburd/go-oauth/oauth"
+	"github.com/go-fsnotify/fsnotify"
+	"io/ioutil"
 	"log"
-	"time"
 	"os"
 	"os/exec"
-	"github.com/garyburd/go-oauth/oauth"
-	"io/ioutil"
-	"encoding/json"
 	"path/filepath"
 	"strings"
-	"github.com/go-fsnotify/fsnotify"
+	"time"
 )
 
 // time formats
@@ -20,11 +20,11 @@ const ExifTimeLayout = "2006:01:02 15:04:05"
 const FlickrTimeLayout = "2006-01-02 15:04:05"
 
 type Options struct {
-	ConfigPath string
-	Dryrun bool
-	NoUpload bool
-	Daemon bool
-	RetroTags bool
+	ConfigPath  string
+	Dryrun      bool
+	NoUpload    bool
+	Daemon      bool
+	RetroTags   bool
 	RetroAlbums bool
 }
 
@@ -32,38 +32,37 @@ type PhotosMap map[string]Photo
 
 type OauthConfig struct {
 	Consumer oauth.Credentials
-	Access oauth.Credentials
+	Access   oauth.Credentials
 }
 
 type PhotosyncConfig struct {
 	OauthConfig
-	Filenames []FilenameConfig `json:"filenames"`
-	WatchDir []WatchDirConfig `json:"directories"`
+	Filenames           []FilenameConfig     `json:"filenames"`
+	WatchDir            []WatchDirConfig     `json:"directories"`
 	FilenameTimeFormats []FilenameTimeFormat `json:"filename_time_formats"`
 }
 
 type FilenameTimeFormat struct {
-	Format string
-	Prefix []string
+	Format  string
+	Prefix  []string
 	Postfix []string
 }
 
 type ExifToolOutput struct {
 	SourceFile string
-	ExifTool struct {
+	ExifTool   struct {
 		Warning string
 	}
 	Ifd struct {
 		Orientation string
-		Make string
-		Model string
-		ModifyDate string
+		Make        string
+		Model       string
+		ModifyDate  string
 	} `json:"IFD0"`
 }
 
-
 // Load the consumer key and secret in from the config file
-func LoadConfig(configPath *string,config *PhotosyncConfig) error {
+func LoadConfig(configPath *string, config *PhotosyncConfig) error {
 	b, err := ioutil.ReadFile(*configPath)
 	if err != nil {
 		return err
@@ -96,8 +95,8 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, albums *AlbumsMa
 	for _, dir := range api.config.WatchDir {
 		// ensure the path exists
 		if _, err := os.Stat(dir.Dir); os.IsNotExist(err) {
-				fmt.Printf("no such file or directory: %s", dir.Dir)
-				continue
+			fmt.Printf("no such file or directory: %s", dir.Dir)
+			continue
 		}
 
 		exifAry, er := GetAllExifData(dir.Dir)
@@ -110,7 +109,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, albums *AlbumsMa
 			exifs[ex.SourceFile] = ex
 		}
 
-		err := filepath.Walk(dir.Dir, func (path string, f os.FileInfo, err error) error {
+		err := filepath.Walk(dir.Dir, func(path string, f os.FileInfo, err error) error {
 			return processFile(api, &dir, path, f, &exifs, photos, videos, albums, &renCnt, &exCnt, &upCnt, &errCnt, opt)
 		})
 
@@ -139,7 +138,7 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, albums *AlbumsMa
 				select {
 				case event := <-watcher.Events:
 					//log.Println("event:", event)
-					if event.Op & fsnotify.Create == fsnotify.Create {
+					if event.Op&fsnotify.Create == fsnotify.Create {
 						log.Println("created file:", event.Name)
 						f, err := os.Stat(event.Name)
 						if err != nil {
@@ -155,7 +154,6 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, albums *AlbumsMa
 							}
 						}
 
-
 						processFile(api, cfg, event.Name, f, nil, photos, videos, albums, &renCnt, &exCnt, &upCnt, &errCnt, opt)
 
 						// update album order if changed
@@ -170,8 +168,8 @@ func Sync(api *FlickrAPI, photos *PhotosMap, videos *PhotosMap, albums *AlbumsMa
 		for _, dir := range api.config.WatchDir {
 			// ensure the path exists
 			if _, err := os.Stat(dir.Dir); os.IsNotExist(err) {
-					fmt.Printf("no such file or directory: %s", dir.Dir)
-					continue
+				fmt.Printf("no such file or directory: %s", dir.Dir)
+				continue
 			}
 
 			dirCfgs[dir.Dir] = dir // add to map of configs for the event handler to use
@@ -206,23 +204,27 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 			exif, ok = (*exifs)[path]
 			if !ok {
 				tmpexif, err := GetExifData(path)
-				if err != nil { return err }
+				if err != nil {
+					return err
+				}
 				exif = *tmpexif
 			}
 		} else {
 			tmpexif, err := GetExifData(path)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			exif = *tmpexif
 		}
 
 		// create the dynamic context for the templates in the config
-		context := DymanicValueContext{
-			path: path,
-			dir: dir,
-			ext: ext,
-			title: key,
+		context := DynamicValueContext{
+			path:   path,
+			dir:    dir,
+			ext:    ext,
+			title:  key,
 			dirCfg: *dirCfg,
-			exif: exif,
+			exif:   exif,
 		}
 
 		// rename file if needed
@@ -233,21 +235,23 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 				fmt.Println("rename to:", newPath)
 
 				if !opt.Dryrun {
-					os.Rename(path,newPath)
+					os.Rename(path, newPath)
 					path = newPath // swith to the new file
 					key = newKey
 					var err error
 					f, err = os.Stat(path)
-					if err != nil { return err }
+					if err != nil {
+						return err
+					}
 
 					// update the context as well
-					context = DymanicValueContext{
-						path: path,
-						dir: dir,
-						ext: ext,
-						title: key,
+					context = DynamicValueContext{
+						path:   path,
+						dir:    dir,
+						ext:    ext,
+						title:  key,
 						dirCfg: *dirCfg,
-						exif: exif,
+						exif:   exif,
 					}
 
 					*renCnt++
@@ -281,9 +285,15 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 					tmppath, done, er := FixExif(key, path, f)
 
 					path = tmppath // update the path to the potentially new path
-					if er != nil { *errCnt++; return nil }
+					if er != nil {
+						*errCnt++
+						return nil
+					}
 					res, err := api.Upload(path, f)
-					if err != nil { *errCnt++; return nil }
+					if err != nil {
+						*errCnt++
+						return nil
+					}
 
 					defer done(api, res.PhotoId)
 
@@ -296,15 +306,15 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 					}
 
 					if len(dirCfg.Albums) > 0 {
-						applyAlbums( api, dirCfg, &context, albums, res.PhotoId )
+						applyAlbums(api, dirCfg, &context, albums, res.PhotoId)
 					}
 
 					// add back in to photos and videos
 					newPhoto := Photo{
-						Id: res.PhotoId,
-						Owner: "",
+						Id:     res.PhotoId,
+						Owner:  "",
 						Secret: "",
-						Title: key,
+						Title:  key,
 					}
 
 					switch extUpper {
@@ -321,12 +331,11 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 					fmt.Println("=====| 100% --+ dry run +--")
 				}
 
-
 				*upCnt++
 			} else {
 				// still apply retroactive tags
 				if opt.RetroTags && len(dirCfg.Tags) > 0 {
-					fmt.Print("assign tags: ",dirCfg.Tags)
+					fmt.Print("assign tags: ", dirCfg.Tags)
 					if !opt.Dryrun && !opt.NoUpload {
 						tags, err := dirCfg.GetTags(&context)
 						if err == nil {
@@ -340,7 +349,7 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 
 				// still apply albums
 				if opt.RetroAlbums && len(dirCfg.Albums) > 0 {
-					applyAlbums( api, dirCfg, &context, albums, exPhoto.Id )
+					applyAlbums(api, dirCfg, &context, albums, exPhoto.Id)
 				}
 
 				*exCnt++
@@ -351,7 +360,7 @@ func processFile(api *FlickrAPI, dirCfg *WatchDirConfig, path string, f os.FileI
 	return nil
 }
 
-func applyAlbums(api *FlickrAPI, dirCfg *WatchDirConfig, context *DymanicValueContext, albums *AlbumsMap, photoId string) {
+func applyAlbums(api *FlickrAPI, dirCfg *WatchDirConfig, context *DynamicValueContext, albums *AlbumsMap, photoId string) {
 	for _, albName := range dirCfg.GetAlbums(context) {
 		if val, ok := (*albums)[albName]; ok {
 			api.AddToAlbum(photoId, val)
@@ -393,11 +402,12 @@ func getTimeFromTitle(api *FlickrAPI, title string) (*time.Time, error) {
 
 		// parse what's left
 		t, err := time.Parse(tf.Format, tmp)
-		if err == nil { return &t, nil }
+		if err == nil {
+			return &t, nil
+		}
 	}
 	return nil, Error{"no timestamp in title"}
 }
-
 
 func GetExifData(path string) (*ExifToolOutput, error) {
 	exifs, err := GetAllExifData(path)
@@ -405,24 +415,26 @@ func GetExifData(path string) (*ExifToolOutput, error) {
 		return nil, err
 	}
 	if len(*exifs) == 0 {
-		return nil, Error{ "no exif data found" }
+		return nil, Error{"no exif data found"}
 	}
 	return &(*exifs)[0], nil
 }
 
 func GetAllExifData(path string) (*[]ExifToolOutput, error) {
-	out, err := exec.Command("exiftool","-a","-u","-g1","-json","-r",path).Output()
+	out, err := exec.Command("exiftool", "-a", "-u", "-g1", "-json", "-r", path).Output()
 	foo := string(out)
 	final := ""
 	// kill new lines
 	final = strings.Replace(foo, "\n", "", -1)
 	out = []byte(final)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	var exif []ExifToolOutput
 	if err := json.Unmarshal(out, &exif); err != nil {
 		log.Fatal(final)
-		log.Fatal("unmarshal error: ",err)
+		log.Fatal("unmarshal error: ", err)
 		return nil, err
 	}
 
@@ -443,11 +455,13 @@ func FixExif(title string, path string, f os.FileInfo) (string, func(api *Flickr
 	_setDateTaken := func(api *FlickrAPI, photoId string) {
 		var err error
 		timeFromFilename, err = getTimeFromTitle(api, title)
-		if err != nil { timeFromFilename = nil }
+		if err != nil {
+			timeFromFilename = nil
+		}
 
 		// check the file name
 		if timeFromFilename != nil {
-			fmt.Printf("set time from file name: %s\n",timeFromFilename.Format(FlickrTimeLayout))
+			fmt.Printf("set time from file name: %s\n", timeFromFilename.Format(FlickrTimeLayout))
 			api.SetDate(photoId, timeFromFilename.Format(FlickrTimeLayout)) // eat the error as this is optional
 		}
 	}
@@ -459,16 +473,17 @@ func FixExif(title string, path string, f os.FileInfo) (string, func(api *Flickr
 		if timeFromFilename == nil {
 			// fall back to the mod time
 			// we do this for MOV's because there isn't exif data to use
-			fmt.Printf("set time to: %s\n",f.ModTime().Format(FlickrTimeLayout))
+			fmt.Printf("set time to: %s\n", f.ModTime().Format(FlickrTimeLayout))
 			api.SetDate(photoId, f.ModTime().Format(FlickrTimeLayout)) // eat the error as this is optional
 		}
 	}
 
-
 	if extUpper == ".JPG" {
 		// check for valid exif data
 		exif, err := GetExifData(path)
-		if err != nil { return "", _setDateTaken, err }
+		if err != nil {
+			return "", _setDateTaken, err
+		}
 
 		if len(exif.ExifTool.Warning) > 0 {
 			// we have an exif error
@@ -476,17 +491,21 @@ func FixExif(title string, path string, f os.FileInfo) (string, func(api *Flickr
 				// we have a valid date already so just fix exif
 
 				// create tmp file and copy
-				tmpfile, err := ioutil.TempFile("",f.Name()+".")
-				if err != nil { return "", _setDateTaken, err }
+				tmpfile, err := ioutil.TempFile("", f.Name()+".")
+				if err != nil {
+					return "", _setDateTaken, err
+				}
 
 				tmpfilePath := tmpfile.Name() // ensure it's a new file for the sake of
 				os.Remove(tmpfile.Name())
 
-				_, errr := exec.Command("exiftool","-exif:all=","-tagsfromfile","@","-all:all","-unsafe","-o",tmpfilePath,path).CombinedOutput()
-				if errr != nil { return "", _setDateTaken, errr }
+				_, errr := exec.Command("exiftool", "-exif:all=", "-tagsfromfile", "@", "-all:all", "-unsafe", "-o", tmpfilePath, path).CombinedOutput()
+				if errr != nil {
+					return "", _setDateTaken, errr
+				}
 
 				// return the callback function that should get called when use of this image is complete
-				return tmpfilePath, func(api *FlickrAPI, photoId string) {os.Remove(tmpfilePath) }, errr
+				return tmpfilePath, func(api *FlickrAPI, photoId string) { os.Remove(tmpfilePath) }, errr
 			}
 		}
 
