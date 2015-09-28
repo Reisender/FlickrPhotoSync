@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/Reisender/photosync"
-	"github.com/codegangsta/cli"
 	"log"
 	"os"
-	"os/user"
+
+	"github.com/Reisender/photosync"
+	"github.com/codegangsta/cli"
+	homedir "github.com/mitchellh/go-homedir"
 )
 
 const syncphotos_version_string = "0.1.0"
@@ -79,8 +80,7 @@ func run(opt *photosync.Options) {
 }
 
 func main() {
-	u, _ := user.Current()
-
+	hd, _ := homedir.Dir()
 	app := cli.NewApp()
 	app.EnableBashCompletion = true
 	app.Name = "photosync"
@@ -90,7 +90,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "config",
-			Value:  fmt.Sprintf("%s/.syncphotos.conf.json", u.HomeDir),
+			Value:  fmt.Sprintf("%s/.syncphotos.conf.json", hd),
 			Usage:  "path to config json file",
 			EnvVar: "PHOTOSYNC_CONFIG",
 		},
