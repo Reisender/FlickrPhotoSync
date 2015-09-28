@@ -72,7 +72,9 @@ func run(opt *photosync.Options) {
 
 	fmt.Println(rencnt, " renamed")
 	fmt.Println(excnt, " existing")
-	fmt.Println(newcnt, " uploaded")
+	if !opt.NoUpload {
+		fmt.Println(newcnt, " uploaded")
+	}
 	fmt.Println(errCnt, " failed")
 }
 
